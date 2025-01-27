@@ -18,17 +18,17 @@
   "author": "Tasneem",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.76.0"
+    "vscode": "^1.94.0"
   },
   "categories": ["Other"],
   "activationEvents": [
-    "onCommand:healOps.scanMicroservices"
+    "onCommand:healops.scanMicroservices"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "healOps.scanMicroservices",
+        "command": "healops.scanMicroservices",
         "title": "Scan Microservices",
         "category": "HealOps"
       }
