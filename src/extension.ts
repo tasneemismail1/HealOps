@@ -19,9 +19,10 @@ function scanCodebase() {
         const retryIssues = detectRetryIssues(code);
         const circuitBreakerIssues = detectCircuitBreakerIssues(code);
         const healthCheckIssues = detectHealthCheckIssues(code);
+        const timeoutIssues = detectTimeoutIssues(code);
 
         // Aggregate and display results
-        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues];
+        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues];
         if (issues.length > 0) {
             vscode.window.showWarningMessage(`Found ${issues.length} issues in your code.`);
             vscode.window.showInformationMessage('Detailed Issues:', { modal: true });
@@ -67,6 +68,14 @@ function detectHealthCheckIssues(code: string): string[] {
     return issues;
 }
 
+function detectTimeoutIssues(code: string): string[] {
+    const issues: string[] = [];
+    const timeoutPattern = /axios\.(get|post|put|delete)\([\s\S]?{[\s\S]?timeout:/g;
+    if (!timeoutPattern.test(code)) {
+        issues.push('No timeout configuration in axios API calls.');
+    }
+    return issues;
+}
 
 //please do not change this command
 export function deactivate() {}
