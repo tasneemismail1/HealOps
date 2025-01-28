@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-
+// please dont changethis function
 export function activate(context: vscode.ExtensionContext) {
     let disposable = vscode.commands.registerCommand('healops.scanMicroservices', () => {
         vscode.window.showInformationMessage('Scanning your Microservices...');
@@ -8,7 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(disposable);
 }
-
+//here u can change 3ady
 function scanCodebase() {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
@@ -67,4 +67,6 @@ function detectHealthCheckIssues(code: string): string[] {
     return issues;
 }
 
+
+//please do not change this command
 export function deactivate() {}
