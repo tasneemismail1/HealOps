@@ -20,9 +20,10 @@ function scanCodebase() {
         const circuitBreakerIssues = detectCircuitBreakerIssues(code);
         const healthCheckIssues = detectHealthCheckIssues(code);
         const timeoutIssues = detectTimeoutIssues(code);
+        const dependencyInjectionIssues = detectDependencyInjectionIssues(code);
 
         // Aggregate and display results
-        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues];
+        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues];
         if (issues.length > 0) {
             vscode.window.showWarningMessage(`Found ${issues.length} issues in your code.`);
             vscode.window.showInformationMessage('Detailed Issues:', { modal: true });
@@ -73,6 +74,16 @@ function detectTimeoutIssues(code: string): string[] {
     const timeoutPattern = /axios\.(get|post|put|delete)\([\s\S]?{[\s\S]?timeout:/g;
     if (!timeoutPattern.test(code)) {
         issues.push('No timeout configuration in axios API calls.');
+    }
+    return issues;
+}
+
+function detectDependencyInjectionIssues(code: string): string[] {
+    const issues: string[] = [];
+    const hardcodedPattern = /new\s+[A-Z]\w+\(/g; // Detect 'new ClassName()'
+    const matches = code.match(hardcodedPattern) || [];
+    if (matches.length > 0) {
+        issues.push(`Found ${matches.length} hardcoded dependencies. Consider using dependency injection.`);
     }
     return issues;
 }
