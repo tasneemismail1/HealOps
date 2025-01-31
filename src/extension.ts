@@ -22,9 +22,10 @@ function scanCodebase() {
         const timeoutIssues = detectTimeoutIssues(code);
         const dependencyInjectionIssues = detectDependencyInjectionIssues(code);
         const secureHeadersIssues = detectSecureHeadersIssues(code);
+        const InputValidationIssues = detectInputValidationIssues(code);
 
         // Aggregate and display results
-        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues, ...secureHeadersIssues];
+        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues, ...secureHeadersIssues, ...InputValidationIssues];
         if (issues.length > 0) {
             vscode.window.showWarningMessage(`Found ${issues.length} issues in your code.`);
             vscode.window.showInformationMessage('Detailed Issues:', { modal: true });
@@ -96,6 +97,7 @@ function detectSecureHeadersIssues(code: string): string[] {
     }
     return issues;
 }
+
 function detectInputValidationIssues(code: string): string[] {
     const issues: string[] = [];
 
