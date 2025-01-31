@@ -24,7 +24,7 @@ function scanCodebase() {
         const secureHeadersIssues = detectSecureHeadersIssues(code);
 
         // Aggregate and display results
-        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues];
+        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues, ...secureHeadersIssues];
         if (issues.length > 0) {
             vscode.window.showWarningMessage(`Found ${issues.length} issues in your code.`);
             vscode.window.showInformationMessage('Detailed Issues:', { modal: true });
