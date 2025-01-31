@@ -96,6 +96,26 @@ function detectSecureHeadersIssues(code: string): string[] {
     }
     return issues;
 }
+function detectInputValidationIssues(code: string): string[] {
+    const issues: string[] = [];
+
+    // Regular expression to find Express routes
+    const routePattern = /app\.(get|post|put|delete)\(['"`](.*?)['"`],\s*(\w+)/g;
+    const matches = [...code.matchAll(routePattern)];
+
+    matches.forEach((match) => {
+        const route = match[2]; // Extract the route path
+        const handlerFunction = match[3]; // Extract the function name
+
+        // Check if the validation function is used before the handler
+        if (!code.includes(`${handlerFunction}, validate`)) {
+            issues.push(`Missing input validation for route: ${route}`);
+        }
+    });
+
+    return issues;
+}
+
 
 //please do not change this command
 export function deactivate() {}
