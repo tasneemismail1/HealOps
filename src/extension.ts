@@ -88,5 +88,13 @@ function detectDependencyInjectionIssues(code: string): string[] {
     return issues;
 }
 
+function detectSecureHeadersIssues(code: string): string[] {
+    const issues: string[] = [];
+    if (!code.includes('helmet()')) {
+        issues.push('Secure headers middleware (helmet) is missing.');
+    }
+    return issues;
+}
+
 //please do not change this command
 export function deactivate() {}
