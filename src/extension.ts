@@ -21,6 +21,7 @@ function scanCodebase() {
         const healthCheckIssues = detectHealthCheckIssues(code);
         const timeoutIssues = detectTimeoutIssues(code);
         const dependencyInjectionIssues = detectDependencyInjectionIssues(code);
+        const secureHeadersIssues = detectSecureHeadersIssues(code);
 
         // Aggregate and display results
         const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues];
