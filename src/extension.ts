@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-// please dont changethis function
+
+// Please do not change this function
 export function activate(context: vscode.ExtensionContext) {
     let disposable = vscode.commands.registerCommand('healops.scanMicroservices', () => {
         vscode.window.showInformationMessage('Scanning your Microservices...');
@@ -8,7 +9,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(disposable);
 }
-//here u can change 3ady
+
+// Here you can change freely
 function scanCodebase() {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
@@ -23,6 +25,8 @@ function scanCodebase() {
         const dependencyInjectionIssues = detectDependencyInjectionIssues(code);
         const loggingIssues = detectLoggingIssues(code);
         const rateLimitingIssues = detectRateLimitingIssues(code);
+        const secureHeadersIssues = detectSecureHeadersIssues(code);
+        const inputValidationIssues = detectInputValidationIssues(code);
 
         // Aggregate and display results
         const issues = [
@@ -32,7 +36,9 @@ function scanCodebase() {
             ...timeoutIssues,
             ...dependencyInjectionIssues,
             ...loggingIssues,
-            ...rateLimitingIssues
+            ...rateLimitingIssues,
+            ...secureHeadersIssues,
+            ...inputValidationIssues
         ];
         
         if (issues.length > 0) {
@@ -99,6 +105,34 @@ function detectDependencyInjectionIssues(code: string): string[] {
     return issues;
 }
 
+function detectSecureHeadersIssues(code: string): string[] {
+    const issues: string[] = [];
+    if (!code.includes('helmet()')) {
+        issues.push('Secure headers middleware (helmet) is missing.');
+    }
+    return issues;
+}
+
+function detectInputValidationIssues(code: string): string[] {
+    const issues: string[] = [];
+
+    // Regular expression to find Express routes
+    const routePattern = /app\.(get|post|put|delete)\(['"`](.*?)['"`],\s*(\w+)/g;
+    const matches = [...code.matchAll(routePattern)];
+
+    matches.forEach((match) => {
+        const route = match[2]; // Extract the route path
+        const handlerFunction = match[3]; // Extract the function name
+
+        // Check if the validation function is used before the handler
+        if (!code.includes(`${handlerFunction}, validate`)) {
+            issues.push(`Missing input validation for route: ${route}`);
+        }
+    });
+
+    return issues;
+}
+
 function detectLoggingIssues(code: string): string[] {
     const issues: string[] = [];
     const tryCatchPattern = /try\s*{[\s\S]*?}\s*catch\s*\([\s\S]*?\)\s*{[\s\S]*?}/g;
@@ -122,5 +156,5 @@ function detectRateLimitingIssues(code: string): string[] {
     return issues;
 }
 
-// please do not change this command
+// Please do not change this command
 export function deactivate() {}
