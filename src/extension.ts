@@ -21,9 +21,20 @@ function scanCodebase() {
         const healthCheckIssues = detectHealthCheckIssues(code);
         const timeoutIssues = detectTimeoutIssues(code);
         const dependencyInjectionIssues = detectDependencyInjectionIssues(code);
+        const loggingIssues = detectLoggingIssues(code);
+        const rateLimitingIssues = detectRateLimitingIssues(code);
 
         // Aggregate and display results
-        const issues = [...retryIssues, ...circuitBreakerIssues, ...healthCheckIssues, ...timeoutIssues, ...dependencyInjectionIssues];
+        const issues = [
+            ...retryIssues,
+            ...circuitBreakerIssues,
+            ...healthCheckIssues,
+            ...timeoutIssues,
+            ...dependencyInjectionIssues,
+            ...loggingIssues,
+            ...rateLimitingIssues
+        ];
+        
         if (issues.length > 0) {
             vscode.window.showWarningMessage(`Found ${issues.length} issues in your code.`);
             vscode.window.showInformationMessage('Detailed Issues:', { modal: true });
@@ -88,5 +99,28 @@ function detectDependencyInjectionIssues(code: string): string[] {
     return issues;
 }
 
-//please do not change this command
+function detectLoggingIssues(code: string): string[] {
+    const issues: string[] = [];
+    const tryCatchPattern = /try\s*{[\s\S]*?}\s*catch\s*\([\s\S]*?\)\s*{[\s\S]*?}/g;
+    const loggingPattern = /(console\.log|console\.error|logger\.)/;
+    const matches = code.match(tryCatchPattern) || [];
+    
+    matches.forEach((block, index) => {
+        if (!loggingPattern.test(block)) {
+            issues.push(`Missing logging in try-catch block #${index + 1}.`);
+        }
+    });
+
+    return issues;
+}
+
+function detectRateLimitingIssues(code: string): string[] {
+    const issues: string[] = [];
+    if (!code.includes('express-rate-limit')) {
+        issues.push('Rate limiting middleware is missing.');
+    }
+    return issues;
+}
+
+// please do not change this command
 export function deactivate() {}
