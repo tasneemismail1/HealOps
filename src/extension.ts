@@ -327,6 +327,8 @@ function detectRateLimitingIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
+
+
 function detectSecureHeadersIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundHelmet = false;
@@ -342,6 +344,35 @@ function detectSecureHeadersIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
+
+function detectInputValidationIssues(ast: any, file: string): string[] {
+    const issues: string[] = [];
+
+    walkSimple(ast, {
+        CallExpression(node) {
+            if (
+                node.callee.type === 'MemberExpression' &&
+                node.callee.object.type === 'Identifier' &&
+                node.callee.object.name === 'app' &&
+                node.callee.property.type === 'Identifier' && // Ensure property is an Identifier
+                ['get', 'post', 'put', 'delete'].includes(node.callee.property.name) // Check HTTP method
+            ) {
+                const routePath = node.arguments[0]; // First argument (route path)
+                const routeHandler = node.arguments[1]; // Second argument (route handler)
+
+                // Ensure routePath is a Literal (string)
+                if (routePath && routePath.type === 'Literal' && typeof routePath.value === 'string') {
+                    if (routeHandler?.type === 'Identifier' && !routeHandler.name.includes('validate')) {
+                        issues.push(`[${file}] Missing input validation middleware for route: ${routePath.value}`);
+                    }
+                }
+            }
+        }
+    });
+
+    return issues;
+}
+
 
 // Deactivate extension
 export function deactivate() { }
