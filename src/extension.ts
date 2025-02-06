@@ -178,7 +178,7 @@ function detectIssues(ast: any, file: string): string[] {
         ...detectTimeoutIssues(ast, file),
         ...detectDependencyInjectionIssues(ast, file),
         ...detectLoggingIssues(ast, file),
-        // ...detectRateLimitingIssues(ast, file),
+        ...detectRateLimitingIssues(ast, file),
         // ...detectSecureHeadersIssues(ast, file),
         // ...detectInputValidationIssues(ast, file)
     ];
@@ -312,6 +312,21 @@ function detectLoggingIssues(ast: any, file: string): string[] {
     return issues;
 }
 
+function detectRateLimitingIssues(ast: any, file: string): string[] {
+    const issues: string[] = [];
+    let foundRateLimit = false;
+    walkSimple(ast, {
+        CallExpression(node) {
+            if (node.callee.type === 'Identifier' && node.callee.name === 'rateLimit') {
+                foundRateLimit = true;
+            }
+        }
+    });
+    if (!foundRateLimit) {
+        issues.push(`[${file}] Rate limiting middleware is missing.`);
+    }
+    return issues;
+}
 
 
 // Deactivate extension
