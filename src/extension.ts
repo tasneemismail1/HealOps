@@ -179,8 +179,8 @@ function detectIssues(ast: any, file: string): string[] {
         ...detectDependencyInjectionIssues(ast, file),
         ...detectLoggingIssues(ast, file),
         ...detectRateLimitingIssues(ast, file),
-        // ...detectSecureHeadersIssues(ast, file),
-        // ...detectInputValidationIssues(ast, file)
+        ...detectSecureHeadersIssues(ast, file),
+        ...detectInputValidationIssues(ast, file)
     ];
 }
 
