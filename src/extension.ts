@@ -100,9 +100,9 @@ class HealOpsPanel {
                 window.addEventListener('message', event => {
                     const { command, data, progress } = event.data;
                     if (command === 'updateIssues') {
-                        document.getElementById('issues').innerHTML = 
-                            data.map(issue => 
-                                \`<div class="issue-item">\${issue} 
+                        document.getElementById('issues').innerHTML =
+                            data.map(issue =>
+                                \`<div class="issue-item">\${issue}
                                 <button class="fix-btn" onclick="fixIssue('\${issue}')">Fix</button></div>\`
                             ).join('');
                     } else if (command === 'updateProgress') {
@@ -177,7 +177,7 @@ function detectIssues(ast: any, file: string): string[] {
         ...detectHealthCheckIssues(ast, file),
         ...detectTimeoutIssues(ast, file),
         ...detectDependencyInjectionIssues(ast, file),
-        // ...detectLoggingIssues(ast, file),
+        ...detectLoggingIssues(ast, file),
         // ...detectRateLimitingIssues(ast, file),
         // ...detectSecureHeadersIssues(ast, file),
         // ...detectInputValidationIssues(ast, file)
@@ -288,6 +288,31 @@ function detectDependencyInjectionIssues(ast: any, file: string): string[] {
     return issues;
 }
 
+function detectLoggingIssues(ast: any, file: string): string[] {
+    const issues: string[] = [];
+    walkSimple(ast, {
+        TryStatement(node) {
+            if (node.handler) {
+                let hasLogging = false;
+                walkSimple(node.handler.body, {
+                    CallExpression(innerNode) {
+                        if (innerNode.callee.type === 'MemberExpression' &&
+                            innerNode.callee.object.type === 'Identifier' &&
+                            innerNode.callee.object.name === 'console') {
+                            hasLogging = true;
+                        }
+                    }
+                });
+                if (!hasLogging) {
+                    issues.push(`[${file}] Missing logging in try-catch block.`);
+                }
+            }
+        }
+    });
+    return issues;
+}
+
+
 
 // Deactivate extension
-export function deactivate() {}
+export function deactivate() { }
