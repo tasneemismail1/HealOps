@@ -176,7 +176,7 @@ function detectIssues(ast: any, file: string): string[] {
         ...detectCircuitBreakerIssues(ast, file),
         ...detectHealthCheckIssues(ast, file),
         ...detectTimeoutIssues(ast, file),
-        // ...detectDependencyInjectionIssues(ast, file),
+        ...detectDependencyInjectionIssues(ast, file),
         // ...detectLoggingIssues(ast, file),
         // ...detectRateLimitingIssues(ast, file),
         // ...detectSecureHeadersIssues(ast, file),
@@ -273,6 +273,18 @@ function detectTimeoutIssues(ast: any, file: string): string[] {
         issues.push(`[${file}] No timeout configuration in axios API calls.`);
     }
 
+    return issues;
+}
+
+function detectDependencyInjectionIssues(ast: any, file: string): string[] {
+    const issues: string[] = [];
+    walkSimple(ast, {
+        NewExpression(node) {
+            if (node.callee.type === 'Identifier') {
+                issues.push(`[${file}] Hardcoded dependency detected: ${node.callee.name}. Consider using dependency injection.`);
+            }
+        }
+    });
     return issues;
 }
 
