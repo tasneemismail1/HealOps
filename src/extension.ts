@@ -176,11 +176,11 @@ function detectIssues(ast: any, file: string): string[] {
         ...detectCircuitBreakerIssues(ast, file),
         ...detectHealthCheckIssues(ast, file),
         ...detectTimeoutIssues(ast, file),
-        ...detectDependencyInjectionIssues(ast, file),
-        ...detectLoggingIssues(ast, file),
-        ...detectRateLimitingIssues(ast, file),
-        ...detectSecureHeadersIssues(ast, file),
-        ...detectInputValidationIssues(ast, file)
+        // ...detectDependencyInjectionIssues(ast, file),
+        // ...detectLoggingIssues(ast, file),
+        // ...detectRateLimitingIssues(ast, file),
+        // ...detectSecureHeadersIssues(ast, file),
+        // ...detectInputValidationIssues(ast, file)
     ];
 }
 
@@ -248,6 +248,34 @@ function detectHealthCheckIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
+
+function detectTimeoutIssues(ast: any, file: string): string[] {
+    const issues: string[] = [];
+    let hasTimeout = false;
+
+    walkSimple(ast, {
+        CallExpression(node) {
+            if (node.callee.type === 'MemberExpression' && node.callee.object.type === 'Identifier' && node.callee.object.name === 'axios') {
+                const configArg = node.arguments[1];
+                if (configArg && configArg.type === 'ObjectExpression') {
+                    const hasTimeoutProp = configArg.properties.some((prop: any) =>
+                        prop.type === 'Property' && prop.key.type === 'Identifier' && prop.key.name === 'timeout'
+                    );
+                    if (hasTimeoutProp) {
+                        hasTimeout = true;
+                    }
+                }
+            }
+        }
+    });
+
+    if (!hasTimeout) {
+        issues.push(`[${file}] No timeout configuration in axios API calls.`);
+    }
+
+    return issues;
+}
+
 
 // Deactivate extension
 export function deactivate() {}
