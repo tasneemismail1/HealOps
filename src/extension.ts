@@ -62,6 +62,7 @@ class HealOpsPanel {
                     this._panel.webview.postMessage({ command: 'updateIssues', data: issues });
                 } else if (message.command === 'fixIssue') {
                     applyFixTimeoutIssue(message.issue);
+                    applyFixLoggingIssue(message.issue);
                 }
             },
             null
@@ -322,7 +323,67 @@ function fixTimeoutIssues(ast: any, file: string): string {
     return codeModified ? escodegen.generate(ast, { format: { indent: { style: "  " } } }) : "";
 }
 
+async function applyFixLoggingIssue(issue: string) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace found.');
+        return;
+    }
 
+    const match = issue.match(/^(.+?) - /);
+    if (!match) {
+        vscode.window.showErrorMessage('❌ Invalid issue format.');
+        return;
+    }
+
+    const fileName = match[1].trim();
+    const projectRoot = workspaceFolders[0].uri.fsPath;
+    const allFiles = getAllJsTsFiles(projectRoot);
+    const filePath = allFiles.find(file => path.basename(file) === fileName);
+
+    if (!filePath) {
+        vscode.window.showErrorMessage(`❌ Error: File not found in workspace - ${fileName}`);
+        return;
+    }
+
+    try {
+        const document = await vscode.workspace.openTextDocument(filePath);
+        const text = document.getText();
+        const fixedCode = fixLoggingIssues(text);
+
+        if (fixedCode === text) {
+            vscode.window.showInformationMessage(`✅ No changes needed in ${filePath}.`);
+            return;
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
+        edit.replace(document.uri, fullRange, fixedCode);
+
+        await vscode.workspace.applyEdit(edit);
+        vscode.window.showInformationMessage(`✅ Logging issue fixed in ${filePath}.`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`❌ Error fixing logging issue: ${error}`);
+    }
+}
+
+function fixLoggingIssues(fileContent: string): string {
+    let modifiedCode = fileContent;
+    let changesMade = false;
+
+    modifiedCode = modifiedCode.replace(
+        /catch\s*\(([^)]+)\)\s*{([^}]*)}/g,
+        (match, errorVar, body) => {
+            if (!body.includes("console.error")) {
+                changesMade = true;
+                return `catch (${errorVar}) { console.error('Error:', ${errorVar}); ${body} }`;
+            }
+            return match;
+        }
+    );
+
+    return changesMade ? modifiedCode : fileContent;
+}
 
 
 // === ISSUE DETECTION FUNCTIONS ===
