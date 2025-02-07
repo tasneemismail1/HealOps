@@ -61,13 +61,21 @@ class HealOpsPanel {
                     });
                     this._panel.webview.postMessage({ command: 'updateIssues', data: issues });
                 } else if (message.command === 'fixIssue') {
-                    applyFixTimeoutIssue(message.issue);
-                    applyFixLoggingIssue(message.issue);
+                    if (message.issue.includes('No timeout configuration in axios API calls.')) {
+                        applyFixTimeoutIssue(message.issue);
+                    } else if (message.issue.includes('Missing logging in try-catch block')) {
+                        applyFixLoggingIssue(message.issue);
+                    } else if (message.issue.includes('Rate limiting middleware is missing')) {
+                        applyFixRateLimitingIssue(message.issue);
+                    } else {
+                        vscode.window.showInformationMessage('Fixing still under work');
+                    }
                 }
             },
             null
         );
     }
+
 
     private _getHtmlForWebview() {
         return `<!DOCTYPE html>
@@ -202,7 +210,7 @@ function fixIssue(issue: string) {
 
 async function applyFixTimeoutIssue(issue: string) {
 
- //5>>>>>>>>>>>>>>>>>>>>>>>>>>>.
+    //5>>>>>>>>>>>>>>>>>>>>>>>>>>>.
     console.log(issue);
     const file = issue.split(" - ")[0].trim(); // Get everything before ' - '
     console.log("File:", file);
@@ -210,19 +218,19 @@ async function applyFixTimeoutIssue(issue: string) {
     // console.log(match);
     // const filePath = match ? match[1] : 'Unknown File';
     const fileName = path.basename(file);
-    console.log("File name:",fileName); 
+    console.log("File name:", fileName);
     // const directory = "C:\\Users\\HP\\Desktop\\HealOps_Test_Project\\src";
     // const filePath = path.join(directory, fileName);
-    
+
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {return null;}
+    if (!workspaceFolders) { return null; }
     const directory = workspaceFolders[0].uri.fsPath;
-    console.log("directory", directory); 
+    console.log("directory", directory);
     // const files = fs.readdirSync(directory);
     const filePath = path.join(directory, fileName);
     // const stat = fs.statSync(filePath);
-    console.log("File path:", filePath); 
+    console.log("File path:", filePath);
 
 
     try {
@@ -386,6 +394,91 @@ function fixLoggingIssues(fileContent: string): string {
 }
 
 
+async function applyFixRateLimitingIssue(issue: string) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace found.');
+        return;
+    }
+
+    vscode.window.showInformationMessage(`Applying fix for rate limiting in ${issue}`);
+
+    // Extract the correct filename from the issue message
+    const match = issue.match(/^(.+?) - /);
+    if (!match) {
+        vscode.window.showErrorMessage('❌ Invalid issue format.');
+        return;
+    }
+
+    const fileName = match[1].trim();
+    console.log(`📌 Extracted file name from issue: ${fileName}`);
+
+    // Get the correct file path from the project
+    const projectRoot = workspaceFolders[0].uri.fsPath;
+    const allFiles = getAllJsTsFiles(projectRoot);
+    const filePath = allFiles.find(file => path.basename(file) === fileName);
+
+    if (!filePath) {
+        vscode.window.showErrorMessage(`❌ Error: File not found in workspace - ${fileName}`);
+        return;
+    }
+
+    console.log(`✅ Targeting file for fix: ${filePath}`);
+
+    let text = fs.readFileSync(filePath, 'utf8');
+    console.log(`📄 Original Content:\n${text}`);
+
+    const fixedCode = fixRateLimitingIssues(text);
+
+    if (fixedCode === text) {
+        vscode.window.showInformationMessage(`✅ No changes were needed in ${filePath}.`);
+        return;
+    }
+
+    // Save the modified content
+    try {
+        fs.writeFileSync(filePath, fixedCode, 'utf8');
+        console.log(`✅ Successfully updated ${filePath}`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`❌ Failed to update ${filePath} - ${error}`);
+        return;
+    }
+
+    // Reload the updated document in VS Code
+    const document = await vscode.workspace.openTextDocument(filePath);
+    await vscode.window.showTextDocument(document);
+
+    vscode.window.showInformationMessage(`✅ Rate limiting middleware added in ${filePath}`);
+}
+
+
+
+
+
+function fixRateLimitingIssues(fileContent: string): string {
+    let modified = false;
+
+    if (!fileContent.includes("const rateLimit")) {
+        fileContent = "const rateLimit = require('express-rate-limit');\n" + fileContent;
+        modified = true;
+    }
+
+    if (!fileContent.includes("app.use(rateLimit")) {
+        fileContent = fileContent.replace(
+            /const app = express\(\);/,
+            `const app = express();\napp.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));`
+        );
+        modified = true;
+    }
+
+    console.log(`🔧 Fix Applied: ${modified}`);
+    return modified ? fileContent : fileContent; 
+}
+
+
+
+
+
 // === ISSUE DETECTION FUNCTIONS ===
 
 function detectRetryIssues(ast: any, file: string): string[] {
@@ -506,18 +599,42 @@ function detectLoggingIssues(ast: any, file: string): string[] {
 function detectRateLimitingIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundRateLimit = false;
+
     walkSimple(ast, {
         CallExpression(node) {
-            if (node.callee.type === 'Identifier' && node.callee.name === 'rateLimit') {
-                foundRateLimit = true;
+            if (
+                node.callee.type === 'MemberExpression' &&
+                node.callee.object.type === 'Identifier' &&
+                node.callee.object.name === 'app' &&
+                node.callee.property.type === 'Identifier' &&
+                node.callee.property.name === 'use'
+            ) {
+                const args = node.arguments;
+
+                if (
+                    args.some(arg =>
+                        arg.type === 'CallExpression' &&
+                        arg.callee &&
+                        arg.callee.type === 'Identifier' &&
+                        arg.callee.name === 'rateLimit'
+                    )
+                ) {
+                    foundRateLimit = true;
+                }
             }
         }
     });
+
     if (!foundRateLimit) {
+        console.log(`❌ Scanner found missing rate limiting in: ${file}`);
         issues.push(`${file} - Rate limiting middleware is missing.`);
+    } else {
+        console.log(`✅ Scanner detected rate limiting is already present in: ${file}`);
     }
+
     return issues;
 }
+
 
 
 function detectSecureHeadersIssues(ast: any, file: string): string[] {
