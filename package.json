@@ -71,6 +71,7 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
+    "@types/escodegen": "^0.0.10",
     "@types/mocha": "^10.0.8",
     "@types/node": "20.x",
     "@types/vscode": "^1.94.0",
@@ -84,8 +85,10 @@
     "typescript": "^5.6.2"
   },
   "dependencies": {
+    "acorn": "^8.14.0",
     "acorn-walk": "^8.3.4",
     "axios": "^1.7.9",
+    "escodegen": "^2.1.0",
     "express": "^4.21.2"
   }
 }

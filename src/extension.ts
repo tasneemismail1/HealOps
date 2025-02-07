@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
+import * as escodegen from "escodegen";
 
 // Activate extension
 export function activate(context: vscode.ExtensionContext) {
@@ -60,7 +61,7 @@ class HealOpsPanel {
                     });
                     this._panel.webview.postMessage({ command: 'updateIssues', data: issues });
                 } else if (message.command === 'fixIssue') {
-                    fixIssue(message.issue);
+                    applyFixTimeoutIssue(message.issue);
                 }
             },
             null
@@ -143,7 +144,10 @@ async function scanProject(updateProgress: (progress: number) => void) {
         const fileContent = fs.readFileSync(file, 'utf8');
         const ast = acorn.parse(fileContent, { ecmaVersion: 'latest', sourceType: 'module' });
 
-        totalIssues.push(...detectIssues(ast, file));
+        const fileName = path.basename(file);
+        totalIssues.push(...detectIssues(ast, fileName));
+
+        // totalIssues.push(...detectIssues(ast, file));
 
         updateProgress(Math.round(((i + 1) / totalFiles) * 100));
     }
@@ -195,6 +199,128 @@ function fixIssue(issue: string) {
     }, 2000);
 }
 
+async function applyFixTimeoutIssue(issue: string) {
+
+ //5>>>>>>>>>>>>>>>>>>>>>>>>>>>.
+    console.log(issue);
+    const file = issue.split(" - ")[0].trim(); // Get everything before ' - '
+    console.log("File:", file);
+    // const match = issue.match(/\[(.*?)\]/);
+    // console.log(match);
+    // const filePath = match ? match[1] : 'Unknown File';
+    const fileName = path.basename(file);
+    console.log("File name:",fileName); 
+    // const directory = "C:\\Users\\HP\\Desktop\\HealOps_Test_Project\\src";
+    // const filePath = path.join(directory, fileName);
+    
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {return null;}
+    const directory = workspaceFolders[0].uri.fsPath;
+    console.log("directory", directory); 
+    // const files = fs.readdirSync(directory);
+    const filePath = path.join(directory, fileName);
+    // const stat = fs.statSync(filePath);
+    console.log("File path:", filePath); 
+
+
+    try {
+        const document = await vscode.workspace.openTextDocument(filePath);
+        const text = document.getText();
+        const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+
+        const fixedCode = fixTimeoutIssues(ast, filePath);
+
+        if (fixedCode.length === 0) {
+            vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
+            return;
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(
+            document.positionAt(0),
+            document.positionAt(text.length)
+        );
+
+        edit.replace(document.uri, fullRange, fixedCode);
+        await vscode.workspace.applyEdit(edit);
+
+        vscode.window.showInformationMessage(`Timeout issue fixed in ${filePath}.`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error fixing timeout issue: ${error}`);
+    }
+
+}
+        
+
+
+
+
+function fixTimeoutIssues(ast: any, file: string): string {
+    let codeModified = false;
+
+    walkSimple(ast, {
+        CallExpression(node) {
+            if (node.callee.type === "MemberExpression" && node.callee.object.type === "Identifier" && node.callee.object.name === "axios") {
+                let hasTimeout = false;
+                let configObject = null;
+
+                if (node.arguments.length > 1) {
+                    configObject = node.arguments[1];
+
+                    if (configObject.type === "ObjectExpression" && configObject.properties.some((prop) =>
+                        prop.type === "Property" && prop.key.type === "Identifier" && prop.key.name === "timeout")) {
+                        hasTimeout = true;
+                    }
+                }
+
+                if (!hasTimeout) {
+                    // Infer `start` and `end` values from existing nodes
+                    const start = node.start ?? 0;
+                    const end = node.end ?? 0;
+
+                    if (!configObject || configObject.type !== "ObjectExpression") {
+                        // Create a new config object with a timeout
+                        node.arguments.push({
+                            type: "ObjectExpression",
+                            properties: [
+                                {
+                                    type: "Property",
+                                    key: { type: "Identifier", name: "timeout", start, end },
+                                    value: { type: "Literal", value: 5000, start, end },
+                                    kind: "init",
+                                    method: false,
+                                    shorthand: false,
+                                    computed: false,
+                                    start,
+                                    end,
+                                },
+                            ],
+                            start,
+                            end,
+                        });
+                    } else {
+                        // Add timeout to existing config object
+                        configObject.properties.push({
+                            type: "Property",
+                            key: { type: "Identifier", name: "timeout", start, end },
+                            value: { type: "Literal", value: 5000, start, end },
+                            kind: "init",
+                            method: false,
+                            shorthand: false,
+                            computed: false,
+                            start,
+                            end,
+                        });
+                    }
+                    codeModified = true;
+                }
+            }
+        },
+    });
+
+    return codeModified ? escodegen.generate(ast, { format: { indent: { style: "  " } } }) : "";
+}
 
 
 
@@ -206,7 +332,7 @@ function detectRetryIssues(ast: any, file: string): string[] {
     walkSimple(ast, {
         TryStatement(node) {
             if (!node.handler) {
-                issues.push(`[${file}] Missing catch block in try statement.`);
+                issues.push(`${file} - Missing catch block in try statement.`);
             }
         }
     });
@@ -224,7 +350,7 @@ function detectCircuitBreakerIssues(ast: any, file: string): string[] {
         }
     });
     if (!foundCircuitBreaker) {
-        issues.push(`[${file}] Missing circuit breaker logic.`);
+        issues.push(`${file} - Missing circuit breaker logic.`);
     }
     return issues;
 }
@@ -244,7 +370,7 @@ function detectHealthCheckIssues(ast: any, file: string): string[] {
         }
     });
     if (!hasHealthCheck) {
-        issues.push(`[${file}] No health-check endpoint detected.`);
+        issues.push(`${file} - No health-check endpoint detected.`);
     }
     return issues;
 }
@@ -274,7 +400,7 @@ function detectTimeoutIssues(ast: any, file: string): string[] {
     });
 
     if (!hasTimeout) {
-        issues.push(`[${file}] No timeout configuration in axios API calls.`);
+        issues.push(`${file} - No timeout configuration in axios API calls.`);
     }
 
     return issues;
@@ -285,7 +411,7 @@ function detectDependencyInjectionIssues(ast: any, file: string): string[] {
     walkSimple(ast, {
         NewExpression(node) {
             if (node.callee.type === 'Identifier') {
-                issues.push(`[${file}] Hardcoded dependency detected: ${node.callee.name}. Consider using dependency injection.`);
+                issues.push(`${file} - Hardcoded dependency detected: ${node.callee.name}. Consider using dependency injection.`);
             }
         }
     });
@@ -308,7 +434,7 @@ function detectLoggingIssues(ast: any, file: string): string[] {
                     }
                 });
                 if (!hasLogging) {
-                    issues.push(`[${file}] Missing logging in try-catch block.`);
+                    issues.push(`${file} - Missing logging in try-catch block.`);
                 }
             }
         }
@@ -327,7 +453,7 @@ function detectRateLimitingIssues(ast: any, file: string): string[] {
         }
     });
     if (!foundRateLimit) {
-        issues.push(`[${file}] Rate limiting middleware is missing.`);
+        issues.push(`${file} - Rate limiting middleware is missing.`);
     }
     return issues;
 }
@@ -344,7 +470,7 @@ function detectSecureHeadersIssues(ast: any, file: string): string[] {
         }
     });
     if (!foundHelmet) {
-        issues.push(`[${file}] Secure headers middleware (helmet) is missing.`);
+        issues.push(`${file} - Secure headers middleware (helmet) is missing.`);
     }
     return issues;
 }
@@ -367,7 +493,7 @@ function detectInputValidationIssues(ast: any, file: string): string[] {
                 // Ensure routePath is a Literal (string)
                 if (routePath && routePath.type === 'Literal' && typeof routePath.value === 'string') {
                     if (routeHandler?.type === 'Identifier' && !routeHandler.name.includes('validate')) {
-                        issues.push(`[${file}] Missing input validation middleware for route: ${routePath.value}`);
+                        issues.push(`${file} - Missing input validation middleware for route: ${routePath.value}`);
                     }
                 }
             }
