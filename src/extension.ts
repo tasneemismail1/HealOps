@@ -193,14 +193,14 @@ function getAllJsTsFiles(dir: string): string[] {
 function detectIssues(ast: any, file: string): string[] {
     return [
         ...detectRetryIssues(ast, file),
-        // ...detectCircuitBreakerIssues(ast, file),
-        // ...detectHealthCheckIssues(ast, file),
-        // ...detectTimeoutIssues(ast, file),
-        // ...detectDependencyInjectionIssues(ast, file),
-        // ...detectLoggingIssues(ast, file),
-        // ...detectRateLimitingIssues(ast, file),
-        // ...detectSecureHeadersIssues(ast, file),
-        // ...detectInputValidationIssues(ast, file)
+        ...detectCircuitBreakerIssues(ast, file),
+        ...detectHealthCheckIssues(ast, file),
+        ...detectTimeoutIssues(ast, file),
+        ...detectDependencyInjectionIssues(ast, file),
+        ...detectLoggingIssues(ast, file),
+        ...detectRateLimitingIssues(ast, file),
+        ...detectSecureHeadersIssues(ast, file),
+        ...detectInputValidationIssues(ast, file)
     ];
 }
 

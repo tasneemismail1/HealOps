@@ -1,8 +1,9 @@
 {
   "name": "HealOps",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "Tasneem",
   "description": "A VSCode extension focused on self-healing microservices architecture.",
+  "icon": "images/Healopslogo.jpeg",
   "repository": {
     "type": "git",
     "url": "https://github.com/tasneemismail1/HealOps.git"
