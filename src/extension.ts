@@ -5,6 +5,7 @@ import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import { ancestor as walkAncestor } from "acorn-walk";
 import * as escodegen from "escodegen";
+import * as estraverse from 'estraverse';
 
 // Activate extension
 export function activate(context: vscode.ExtensionContext) {
@@ -70,7 +71,10 @@ class HealOpsPanel {
                         applyFixRateLimitingIssue(message.issue);
                     } else if (message.issue.includes('Hardcoded dependency detected')) {
                         applyFixDependencyIssue(message.issue);
-                    } else {
+                    } else if (message.issue.includes('is missing retry logic')) {
+                        console.log("Calling applyFixRetryIssue...");
+                        applyFixRetryIssue(message.issue);
+                    }else {
                         vscode.window.showInformationMessage('Fixing still under work');
                     }
                 }
@@ -189,28 +193,28 @@ function getAllJsTsFiles(dir: string): string[] {
 function detectIssues(ast: any, file: string): string[] {
     return [
         ...detectRetryIssues(ast, file),
-        ...detectCircuitBreakerIssues(ast, file),
-        ...detectHealthCheckIssues(ast, file),
-        ...detectTimeoutIssues(ast, file),
-        ...detectDependencyInjectionIssues(ast, file),
-        ...detectLoggingIssues(ast, file),
-        ...detectRateLimitingIssues(ast, file),
-        ...detectSecureHeadersIssues(ast, file),
-        ...detectInputValidationIssues(ast, file)
+        // ...detectCircuitBreakerIssues(ast, file),
+        // ...detectHealthCheckIssues(ast, file),
+        // ...detectTimeoutIssues(ast, file),
+        // ...detectDependencyInjectionIssues(ast, file),
+        // ...detectLoggingIssues(ast, file),
+        // ...detectRateLimitingIssues(ast, file),
+        // ...detectSecureHeadersIssues(ast, file),
+        // ...detectInputValidationIssues(ast, file)
     ];
 }
 
 // (Include the 9 detection functions here from previous code)
 
 function fixIssue(issue: string) {
-    vscode.window.showInformationMessage(`AI Fixing: ${issue}`);
+    vscode.window.showInformationMessage(`AI Fixing still under work: ${issue}`);
 
     // Simulate AI-generated fix with a timeout
     setTimeout(() => {
-        vscode.window.showInformationMessage(`Fixed: ${issue}`);
+        vscode.window.showInformationMessage(`AI Fixing still under work: ${issue}`);
     }, 2000);
 }
-
+//1 fix time out
 async function applyFixTimeoutIssue(issue: string) {
 
     console.log(issue);
@@ -320,7 +324,7 @@ function fixTimeoutIssues(ast: any, file: string): string {
 
     return codeModified ? escodegen.generate(ast, { format: { indent: { style: "  " } } }) : "";
 }
-
+//2 fix logging 
 async function applyFixLoggingIssue(issue: string) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
@@ -383,7 +387,7 @@ function fixLoggingIssues(fileContent: string): string {
     return changesMade ? modifiedCode : fileContent;
 }
 
-
+//3 fix rate limitation
 async function applyFixRateLimitingIssue(issue: string) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
@@ -461,7 +465,7 @@ function fixRateLimitingIssues(fileContent: string): string {
     return modified ? fileContent : fileContent; 
 }
 
-
+// 4 fix dependency
 async function applyFixDependencyIssue(issue: string) {
 
     console.log(issue);
@@ -567,23 +571,181 @@ function fixDependencyIssues(ast: any, file: string): string {
     return codeModified ? escodegen.generate(ast) : "";
 }
 
+// 5 fix retry
+async function applyFixRetryIssue(issue: string) {
+    console.log("Fixing retry issue for:", issue);
+
+    const file = issue.split(" - ")[0].trim();
+    console.log("Extracted File Path:", file);
+
+    const fileName = path.basename(file);
+    console.log("Extracted File Name:", fileName);
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        console.error("No workspace folders found.");
+        return null;
+    }
+    const directory = workspaceFolders[0].uri.fsPath;
+    console.log("Workspace Directory:", directory);
+
+    const filePath = path.join(directory, fileName);
+    console.log("Final File Path:", filePath);
+
+    try {
+        const document = await vscode.workspace.openTextDocument(filePath);
+        const text = document.getText();
+        console.log("Original Code:", text);
+
+        const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+        const fixedCode = fixRetryIssues(ast, filePath);
+
+        if (fixedCode.length === 0) {
+            vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
+            console.log("No modifications detected.");
+            return;
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
+
+        edit.replace(document.uri, fullRange, fixedCode);
+        await vscode.workspace.applyEdit(edit);
+
+        vscode.window.showInformationMessage(`Retry issue fixed in ${filePath}.`);
+        console.log("Fix applied successfully.");
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error fixing retry issue: ${error}`);
+        console.error("Error fixing retry issue:", error);
+    }
+}
+
+
+function fixRetryIssues(ast: any, file: string): string {
+    let codeModified = false;
+
+    walkSimple(ast, {
+        TryStatement(node) {
+            if (node.block && node.block.body) {
+                node.block.body.forEach((statement: any) => {
+                    if (statement.type === "ExpressionStatement" && statement.expression.type === "CallExpression") {
+                        const isApiCall =
+                            statement.expression.callee.type === "MemberExpression" &&
+                            (statement.expression.callee.object.name === "fetch" ||
+                                statement.expression.callee.object.name === "axios");
+
+                        if (isApiCall) {
+                            console.log(`Adding retry logic to API call in ${file}`);
+
+                            const retryLogic = {
+                                type: "WhileStatement",
+                                test: {
+                                    type: "Literal",
+                                    value: true,
+                                    start: node.start,
+                                    end: node.end,
+                                },
+                                body: {
+                                    type: "BlockStatement",
+                                    body: [
+                                        {
+                                            type: "ExpressionStatement",
+                                            expression: statement.expression,
+                                        },
+                                    ],
+                                },
+                                start: node.start,
+                                end: node.end,
+                            };
+
+                            statement.expression = retryLogic;
+                            codeModified = true;
+                        }
+                    }
+                });
+            }
+        },
+    });
+
+    if (!codeModified) {
+        console.log(`No modifications made for retry logic in ${file}`);
+        return "";
+    }
+
+    console.log("Generated fixed code:", escodegen.generate(ast, { format: { indent: { style: "  " } } }));
+    return escodegen.generate(ast, { format: { indent: { style: "  " } } });
+}
 
 
 
 // === ISSUE DETECTION FUNCTIONS ===
-
+//1 detectRetryIssues
 function detectRetryIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
-    walkSimple(ast, {
-        TryStatement(node) {
-            if (!node.handler) {
-                issues.push(`${file} - Missing catch block in try statement.`);
+
+    estraverse.traverse(ast as any, {
+        enter(node: any, parent: any) {
+            console.log(`Inspecting node of type: ${node.type} in file: ${file}`);
+
+            // Detect API calls (fetch or axios)
+            if (
+                node.type === 'CallExpression' &&
+                node.callee.type === 'Identifier' &&
+                (node.callee.name === 'fetch' || node.callee.name === 'axios')
+            ) {
+                let hasRetryLoop = false;
+                let hasTryCatch = false;
+                let identifierName = 'UnknownVariable';
+
+                console.log(`Found API call (${node.callee.name}) in file: ${file}`);
+
+                // Check if this API call is assigned to a variable
+                if (parent && parent.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
+                    identifierName = parent.id.name;
+                    console.log(`API call result stored in variable: ${identifierName}`);
+                }
+
+                // Check if it's inside a try-catch block
+                let ancestor = parent;
+                while (ancestor) {
+                    if (ancestor.type === 'TryStatement') {
+                        hasTryCatch = true;
+                        console.log(`API call (${node.callee.name}) inside try-catch in file: ${file}`);
+                        break;
+                    }
+                    ancestor = ancestor.parent;
+                }
+
+                // Check for retry mechanisms (loop or recursive call)
+                estraverse.traverse(node, {
+                    enter(subNode: any) {
+                        if (subNode.type === 'WhileStatement' || subNode.type === 'ForStatement') {
+                            hasRetryLoop = true;
+                            console.log(`Found retry loop in file: ${file}`);
+                        }
+                    }
+                });
+
+                // If API call is found without a retry mechanism, flag it with identifier
+                if (!hasRetryLoop) {
+                    issues.push(
+                        `${file} - API call (${node.callee.name}) stored in "${identifierName}" is missing retry logic.`
+                    );
+                    console.log(
+                        `Missing retry logic detected in file: ${file} for variable "${identifierName}".`
+                    );
+                }
             }
         }
     });
+
+    console.log(`Issues detected: ${issues.length}`);
     return issues;
 }
 
+
+
+//2 detectCircuitBreakerIssues
 function detectCircuitBreakerIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundCircuitBreaker = false;
@@ -599,7 +761,7 @@ function detectCircuitBreakerIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
-
+//3 detectHealthCheckIssues
 function detectHealthCheckIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let hasHealthCheck = false;
@@ -619,7 +781,7 @@ function detectHealthCheckIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
-
+//4 detectTimeoutIssues
 function detectTimeoutIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let hasTimeout = false;
@@ -650,7 +812,7 @@ function detectTimeoutIssues(ast: any, file: string): string[] {
 
     return issues;
 }
-
+//5 detectDependencyInjectionIssues
 function detectDependencyInjectionIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     walkSimple(ast, {
@@ -662,7 +824,7 @@ function detectDependencyInjectionIssues(ast: any, file: string): string[] {
     });
     return issues;
 }
-
+//6 detectLoggingIssues
 function detectLoggingIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     walkSimple(ast, {
@@ -686,7 +848,7 @@ function detectLoggingIssues(ast: any, file: string): string[] {
     });
     return issues;
 }
-
+//7 detectRateLimitingIssues
 function detectRateLimitingIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundRateLimit = false;
@@ -727,7 +889,7 @@ function detectRateLimitingIssues(ast: any, file: string): string[] {
 }
 
 
-
+// 8 detectSecureHeadersIssues
 function detectSecureHeadersIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundHelmet = false;
@@ -743,7 +905,7 @@ function detectSecureHeadersIssues(ast: any, file: string): string[] {
     }
     return issues;
 }
-
+//9 detectInputValidationIssues
 function detectInputValidationIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
 
