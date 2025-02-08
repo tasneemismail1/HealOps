@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
+import { ancestor as walkAncestor } from "acorn-walk";
 import * as escodegen from "escodegen";
 
 // Activate extension
@@ -67,6 +68,8 @@ class HealOpsPanel {
                         applyFixLoggingIssue(message.issue);
                     } else if (message.issue.includes('Rate limiting middleware is missing')) {
                         applyFixRateLimitingIssue(message.issue);
+                    } else if (message.issue.includes('Hardcoded dependency detected')) {
+                        applyFixDependencyIssue(message.issue);
                     } else {
                         vscode.window.showInformationMessage('Fixing still under work');
                     }
@@ -210,28 +213,22 @@ function fixIssue(issue: string) {
 
 async function applyFixTimeoutIssue(issue: string) {
 
-    //5>>>>>>>>>>>>>>>>>>>>>>>>>>>.
     console.log(issue);
     const file = issue.split(" - ")[0].trim(); // Get everything before ' - '
     console.log("File:", file);
-    // const match = issue.match(/\[(.*?)\]/);
-    // console.log(match);
-    // const filePath = match ? match[1] : 'Unknown File';
+
     const fileName = path.basename(file);
     console.log("File name:", fileName);
-    // const directory = "C:\\Users\\HP\\Desktop\\HealOps_Test_Project\\src";
-    // const filePath = path.join(directory, fileName);
-
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) { return null; }
+    if (!workspaceFolders) { 
+        return null; 
+    }
     const directory = workspaceFolders[0].uri.fsPath;
     console.log("directory", directory);
-    // const files = fs.readdirSync(directory);
-    const filePath = path.join(directory, fileName);
-    // const stat = fs.statSync(filePath);
-    console.log("File path:", filePath);
 
+    const filePath = path.join(directory, fileName);
+    console.log("File path:", filePath);
 
     try {
         const document = await vscode.workspace.openTextDocument(filePath);
@@ -246,10 +243,7 @@ async function applyFixTimeoutIssue(issue: string) {
         }
 
         const edit = new vscode.WorkspaceEdit();
-        const fullRange = new vscode.Range(
-            document.positionAt(0),
-            document.positionAt(text.length)
-        );
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
 
         edit.replace(document.uri, fullRange, fixedCode);
         await vscode.workspace.applyEdit(edit);
@@ -261,10 +255,6 @@ async function applyFixTimeoutIssue(issue: string) {
 
 }
         
-
-
-
-
 function fixTimeoutIssues(ast: any, file: string): string {
     let codeModified = false;
 
@@ -451,10 +441,6 @@ async function applyFixRateLimitingIssue(issue: string) {
     vscode.window.showInformationMessage(`✅ Rate limiting middleware added in ${filePath}`);
 }
 
-
-
-
-
 function fixRateLimitingIssues(fileContent: string): string {
     let modified = false;
 
@@ -475,6 +461,111 @@ function fixRateLimitingIssues(fileContent: string): string {
     return modified ? fileContent : fileContent; 
 }
 
+
+async function applyFixDependencyIssue(issue: string) {
+
+    console.log(issue);
+    const file = issue.split(" - ")[0].trim(); // Get everything before ' - '
+    console.log("File:", file);
+    const fileName = path.basename(file);
+    console.log("File name:",fileName); 
+    
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        return null;
+    }
+    const directory = workspaceFolders[0].uri.fsPath;
+    console.log("directory", directory); 
+
+    const filePath = path.join(directory, fileName);
+
+    console.log("File path:", filePath); 
+
+    try {
+        const document = await vscode.workspace.openTextDocument(filePath);
+        const text = document.getText();
+        const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+
+        const fixedCode = fixDependencyIssues(ast, filePath);
+
+        if (fixedCode.length === 0) {
+            vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
+            return;
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
+
+        edit.replace(document.uri, fullRange, fixedCode);
+        await vscode.workspace.applyEdit(edit);
+
+        vscode.window.showInformationMessage(`Dependency injection applied in ${filePath}.`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error fixing Dependency injection issue: ${error}`);
+    }
+
+}
+
+function fixDependencyIssues(ast: any, file: string): string {
+    // const issues: string[] = [];
+    let codeModified = false;
+
+    walkAncestor(ast, {
+        NewExpression(node: any, state: any, ancestors: any[]) {
+            if (node.callee.type === 'Identifier') {
+                const className = node.callee.name;
+                // issues.push(`${file} - Hardcoded dependency detected: ${className}. Converting to dependency injection.`);
+
+                // Find the parent function/class where the `new` is used
+                const parentClassNode = ancestors.find(ancestor => ancestor.type === 'ClassDeclaration');
+                const parentFunctionNode = ancestors.find(ancestor => ancestor.type === 'FunctionDeclaration' || ancestor.type === 'FunctionExpression'|| ancestor.type === "ArrowFunctionExpression");
+
+                if (parentClassNode) {
+                    // Convert `this.db = new Database();` → Inject in constructor
+                    const constructorNode = parentClassNode.body.body.find((method: any) => method.kind === 'constructor');
+
+                    if (constructorNode) {
+                        // Ensure the constructor has a `params` array
+                        if (!constructorNode.value.params) {
+                            constructorNode.value.params = [];
+                        }
+
+                        // Ensure constructor takes the dependency as a parameter
+                        if (!constructorNode.value.params.some((param: any) => param.type === 'Identifier' && param.name === `inject${className}`)) {
+                            constructorNode.value.params.unshift({ type: 'Identifier', name: `inject${className}` });
+                        }
+
+                        // Replace `new ClassName()` with `injectClassName`
+                        node.callee.name = `inject${className}`;
+                        codeModified = true;
+                    }
+
+                }else if (parentFunctionNode) {
+                    // Handle function-level injection
+                    if (!Array.isArray(parentFunctionNode.params)) {
+                        parentFunctionNode.params = [];
+                    }
+                    if (!parentFunctionNode.params.some((param: any) => param.type === "Identifier" && param.name === `inject${className}`)) {
+                        parentFunctionNode.params.unshift({type: "Identifier", name: `inject${className}`,});
+                    }
+
+                    // Replace `new ClassName()` with `injectClassName`
+                    node.callee.name = `inject${className}`;
+                    codeModified = true;
+                }
+            }
+        }
+    });
+
+    // if (codeModified) {
+    //     issues.push(`Dependency injection applied in ${file}.`);
+    // } else {
+    //     issues.push(`No changes needed in ${file}.`);
+    // }
+
+    // return issues;
+    return codeModified ? escodegen.generate(ast) : "";
+}
 
 
 
