@@ -1,6 +1,5 @@
 
-
-// folder detection issue
+// ----------------------------- folder detection issue -------------------------------
 
 // async function applyFixTimeoutIssue(issue: string) {
 // //4
@@ -169,6 +168,81 @@
 
 //         edit.replace(document.uri, fullRange, fixedCode);
 //         await vscode.workspace.applyEdit(edit);
+
+//         vscode.window.showInformationMessage(`Timeout issue fixed in ${filePath}.`);
+//     } catch (error) {
+//         vscode.window.showErrorMessage(`Error fixing timeout issue: ${error}`);
+//     }
+
+// }
+//------------------------------ applying modified code without the rest of the file ----------------- 
+
+// async function applyFixTimeoutIssue(issue: string) {
+//     console.log(issue);
+//     const file = issue.split(" - ")[0].trim(); // Get everything before ' - '
+//     console.log("File:", file);
+
+//     const fileName = path.basename(file);
+//     console.log("File name:",fileName); 
+
+//     const workspaceFolders = vscode.workspace.workspaceFolders;
+//     if (!workspaceFolders) {return null;}
+//     const directory = workspaceFolders[0].uri.fsPath;
+//     console.log("directory", directory); 
+//     // const files = fs.readdirSync(directory);
+//     const filePath = path.join(directory, fileName);
+//     // const stat = fs.statSync(filePath);
+//     console.log("File path:", filePath); 
+
+
+//     try {
+//         const document = await vscode.workspace.openTextDocument(filePath);
+//         const text = document.getText();
+//         const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+
+
+//         const fixedCode = fixTimeoutIssues(ast, filePath);
+
+//         if (fixedCode.length === 0) {
+//             vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
+//             return;
+//         }
+
+//         const edit = new vscode.WorkspaceEdit();
+//     //2
+//         // Find differences and update only the modified sections
+//         // const diffs = diffLines(text, fixedCode); // Use `diff-lines` to compute the changes
+//         // const edit = new vscode.WorkspaceEdit();
+
+//         // let positionOffset = 0;
+//         // diffs.forEach((diff) => {
+//         //     if (diff.added || diff.removed) {
+//         //         const start = document.positionAt(positionOffset);
+//         //         const end = document.positionAt(
+//         //             positionOffset + diff.value.length
+//         //         );
+
+//         //         if (diff.added) {
+//         //             // Replace only added text
+//         //             edit.replace(document.uri, new vscode.Range(start, end), diff.value);
+//         //         }
+//         //     }
+//         //     if (!diff.removed) {
+//         //         positionOffset += diff.value.length;
+//         //     }
+//         // });
+//     //1
+//         const fullRange = new vscode.Range(
+//             document.positionAt(0),
+//             document.positionAt(text.length)
+//         );
+
+//         edit.replace(document.uri, fullRange, fixedCode);
+//         await vscode.workspace.applyEdit(edit);
+
+//         // fs.writeFileSync(filePath, fixedCode, 'utf8');
+//         // console.log(`✅ Successfully updated ${filePath}`);
+//         // await vscode.window.showTextDocument(document);
 
 //         vscode.window.showInformationMessage(`Timeout issue fixed in ${filePath}.`);
 //     } catch (error) {
