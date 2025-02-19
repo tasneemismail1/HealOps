@@ -6,6 +6,7 @@ import { simple as walkSimple } from 'acorn-walk';
 import { ancestor as walkAncestor } from "acorn-walk";
 import * as escodegen from "escodegen";
 import * as estraverse from 'estraverse';
+import * as estree from "estree";
 
 // === Activation of the VSCode Extension ===
 export function activate(context: vscode.ExtensionContext) {
@@ -79,7 +80,10 @@ class HealOpsPanel {
                     } else if (message.issue.includes('is missing retry logic')) {
                         console.log("Calling applyFixRetryIssue...");
                         applyFixRetryIssue(message.issue);
-                    } else {
+                    } else if (message.issue.includes('Missing circuit breaker logic')) {
+                        applyFixCircuitBreakerIssue(message.issue);
+                    }
+                    else {
                         vscode.window.showInformationMessage('Fixing still under work');
                     }
                 }
@@ -766,6 +770,185 @@ function fixRetryIssues(ast: any, file: string): string {
     return escodegen.generate(ast, { format: { indent: { style: "  " } } });
 }
 
+// 6 fix circuit
+async function applyFixCircuitBreakerIssue(issue: string) {
+    console.log("Fixing circuit breaker issue for:", issue);
+
+    // Extract the file path from the reported issue
+    const file = issue.split(" - ")[0].trim();
+    console.log("Extracted File Path:", file);
+
+    const fileName = path.basename(file);
+    console.log("Extracted File Name:", fileName);
+
+    // Ensure a workspace is open
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        console.error("No workspace folders found.");
+        return null;
+    }
+
+    // Get the workspace directory
+    const directory = workspaceFolders[0].uri.fsPath;
+    console.log("Workspace Directory:", directory);
+
+    // Construct the full file path
+    const filePath = path.join(directory, fileName);
+    console.log("Final File Path:", filePath);
+
+    try {
+        // Open and read the file content
+        const document = await vscode.workspace.openTextDocument(filePath);
+        const text = document.getText();
+        console.log("Original Code:", text);
+
+        // Parse the file content into an AST (Abstract Syntax Tree) using Acorn
+        const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
+
+        // Apply the circuit breaker fix
+        const fixedCode = fixCircuitBreakerIssues(ast, filePath);
+
+        // If no modifications were made, inform the user
+        if (fixedCode.length === 0) {
+            vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
+            console.log("No modifications detected.");
+            return;
+        }
+
+        // Apply the fixed code to the document in VSCode
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
+        edit.replace(document.uri, fullRange, fixedCode);
+
+        await vscode.workspace.applyEdit(edit);
+        vscode.window.showInformationMessage(`✅ Circuit breaker applied in ${filePath}.`);
+        console.log("Fix applied successfully.");
+    } catch (error) {
+        // Handle any errors that occur during the process
+        vscode.window.showErrorMessage(`❌ Error fixing circuit breaker issue: ${error}`);
+        console.error("Error fixing circuit breaker issue:", error);
+    }
+}
+
+function fixCircuitBreakerIssues(ast: any, file: string): string {
+    let codeModified = false;
+    let hasCircuitBreakerImport = false;
+    let breakerVar: string | null = null; // ✅ Ensure it is a string
+
+
+    // Check for existing `opossum` import
+    walkAncestor(ast, {
+        ImportDeclaration(node: any) {
+            if (node.source.value === "opossum") {
+                hasCircuitBreakerImport = true;
+            }
+        }
+    });
+
+    walkAncestor(ast, {
+        FunctionDeclaration(node: any, ancestors: any[]) {
+            let functionName = node.id.name;
+            breakerVar = `${functionName}Breaker`;
+
+            // Find API calls inside function
+            walkSimple(node, {
+                CallExpression(innerNode, parentNode) {
+                    if (
+                        innerNode.callee.type === "Identifier" &&
+                        (innerNode.callee.name === "fetch" || innerNode.callee.name === "axios")
+                    ) {
+                        console.log(`Found API call (${innerNode.callee.name}) in ${file}`);
+
+                        // Define CircuitBreaker instance **outside function scope**
+                        const breakerDeclaration = {
+                            type: "VariableDeclaration",
+                            declarations: [
+                                {
+                                    type: "VariableDeclarator",
+                                    id: { type: "Identifier", name: breakerVar },
+                                    init: {
+                                        type: "NewExpression",
+                                        callee: { type: "Identifier", name: "CircuitBreaker" },
+                                        arguments: [
+                                            {
+                                                type: "ArrowFunctionExpression",
+                                                params: [],
+                                                body: innerNode, // Preserve the existing API call
+                                                async: true,
+                                            },
+                                            {
+                                                type: "ObjectExpression",
+                                                properties: [
+                                                    {
+                                                        type: "Property",
+                                                        key: { type: "Identifier", name: "timeout" },
+                                                        value: { type: "Literal", value: 5000 },
+                                                        kind: "init",
+                                                    },
+                                                    {
+                                                        type: "Property",
+                                                        key: { type: "Identifier", name: "errorThresholdPercentage" },
+                                                        value: { type: "Literal", value: 50 },
+                                                        kind: "init",
+                                                    },
+                                                    {
+                                                        type: "Property",
+                                                        key: { type: "Identifier", name: "resetTimeout" },
+                                                        value: { type: "Literal", value: 10000 },
+                                                        kind: "init",
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                            kind: "const",
+                        };
+
+                        // Ensure the breaker instance is declared at the top of the AST
+                        if (!codeModified) {
+                            ast.body.unshift(breakerDeclaration);
+                        }
+
+                        // **Correct way to replace the API call with breaker.fire()**
+                        const circuitBreakerCall = {
+                            type: "AwaitExpression",
+                            argument: {
+                                type: "CallExpression",
+                                callee: {
+                                    type: "MemberExpression",
+                                    object: { type: "Identifier", name: breakerVar },
+                                    property: { type: "Identifier", name: "fire" },
+                                },
+                                arguments: [], // Ensure no duplicate URL arguments
+                            },
+                        };
+
+                        // Replace API call with circuit breaker invocation
+                        Object.assign(innerNode, circuitBreakerCall);
+
+                        codeModified = true;
+                    }
+                }
+            });
+        }
+    });
+
+    if (!codeModified) {
+        console.log(`No modifications made for circuit breaker logic in ${file}`);
+        return "";
+    }
+
+    if (!hasCircuitBreakerImport) {
+        return `const CircuitBreaker = require('opossum');\n\n` + escodegen.generate(ast);
+    }
+
+    return escodegen.generate(ast);
+}
+
+
+
 
 
 
@@ -838,26 +1021,69 @@ function detectRetryIssues(ast: any, file: string): string[] {
 
 //2 detectCircuitBreakerIssues
 function detectCircuitBreakerIssues(ast: any, file: string): string[] {
-    const issues: string[] = []; // Array to store detected issues
-    let foundCircuitBreaker = false; // Flag to check if a circuit breaker is found
+    const issues: string[] = [];
+    let foundCircuitBreaker = false;
+    let breakerVariables: Set<string> = new Set(); // Stores variable names that are CircuitBreaker instances
 
-    // Traverse the AST to detect function calls
+    // Step 1: Traverse to find any CircuitBreaker instances and store their variable names
+    
+
+// Step 1: Traverse to find any CircuitBreaker instances and store their variable names
+walkAncestor(ast, {
+    NewExpression(node, state, ancestors) {
+        if (node.callee.type === "Identifier" && node.callee.name === "CircuitBreaker") {
+            // Find the closest ancestor that is a variable declaration
+            for (let i = ancestors.length - 1; i >= 0; i--) {
+                const ancestor = ancestors[i] as estree.Node; // Explicitly type as Node
+
+                // ✅ Type-check: Ensure ancestor is a VariableDeclarator
+                if (
+                    ancestor &&
+                    ancestor.type === "VariableDeclarator"
+                ) {
+                    const declarator = ancestor as estree.VariableDeclarator;
+
+                    // ✅ Ensure `id` exists and is an `Identifier`
+                    if (
+                        declarator.id &&
+                        declarator.id.type === "Identifier"
+                    ) {
+                        breakerVariables.add(declarator.id.name); // Store the variable name
+                        break;
+                    }
+                }
+            }
+        }
+    }
+});
+
+
+    // Step 2: Traverse again to check if breaker.fire() is being used
     walkSimple(ast, {
         CallExpression(node) {
-            // Check if a function or method related to "CircuitBreaker" is used
-            if (node.callee.type === 'Identifier' && node.callee.name.includes('CircuitBreaker')) {
-                foundCircuitBreaker = true;
+            if (
+                node.callee.type === "MemberExpression" &&
+                node.callee.object.type === "Identifier" &&
+                breakerVariables.has(node.callee.object.name) && // Check if it's a known CircuitBreaker variable
+                node.callee.property.type === "Identifier" &&
+                node.callee.property.name === "fire"
+            ) {
+                foundCircuitBreaker = true; // ✅ CircuitBreaker instance is being used
             }
         }
     });
 
-    // If no circuit breaker logic was detected, report an issue
+    // Step 3: Report an issue only if no CircuitBreaker logic is found
     if (!foundCircuitBreaker) {
         issues.push(`${file} - Missing circuit breaker logic.`);
     }
 
-    return issues; // Return the list of detected issues
+    return issues;
 }
+
+
+
+
 
 //3 detectHealthCheckIssues
 function detectHealthCheckIssues(ast: any, file: string): string[] {
