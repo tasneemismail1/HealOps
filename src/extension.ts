@@ -82,6 +82,8 @@ class HealOpsPanel {
                         applyFixRetryIssue(message.issue);
                     } else if (message.issue.includes('Missing circuit breaker logic')) {
                         applyFixCircuitBreakerIssue(message.issue);
+                    } else if (message.issue.includes('No health-check endpoint detected')) {
+                        applyFixHealthCheckIssue(message.issue);
                     }
                     else {
                         vscode.window.showInformationMessage('Fixing still under work');
@@ -948,6 +950,79 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
 }
 
 
+// 7 fix health check
+async function applyFixHealthCheckIssue(issue: string) {
+    console.log("Fixing health check issue for:", issue);
+
+    // Extract the filename from the issue report
+    const file = issue.split(" - ")[0].trim();
+    console.log("Extracted File Name:", file);
+
+    // Ensure a workspace is open
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        vscode.window.showErrorMessage("No workspace found.");
+        return;
+    }
+
+    // Get the workspace directory and find the correct file
+    const projectRoot = workspaceFolders[0].uri.fsPath;
+    const allFiles = getAllJsTsFiles(projectRoot);
+    const filePath = allFiles.find(filePath => path.basename(filePath) === file);
+
+    if (!filePath) {
+        vscode.window.showErrorMessage(`❌ Error: File not found in workspace - ${file}`);
+        return;
+    }
+
+    try {
+        // Open and read the file
+        const document = await vscode.workspace.openTextDocument(filePath);
+        let text = document.getText();
+
+        // Apply the health check fix
+        const fixedCode = fixHealthCheckIssues(text);
+
+        // If no modifications were made, inform the user
+        if (fixedCode === text) {
+            vscode.window.showInformationMessage(`✅ No changes needed in ${filePath}.`);
+            return;
+        }
+
+        // Apply the fixed code to the document in VSCode
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
+        edit.replace(document.uri, fullRange, fixedCode);
+
+        await vscode.workspace.applyEdit(edit);
+        vscode.window.showInformationMessage(`✅ Health check endpoint added in ${filePath}.`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`❌ Error fixing health check issue: ${error}`);
+    }
+}
+
+
+function fixHealthCheckIssues(fileContent: string): string {
+    let modified = false;
+
+    // Check if `app.get('/health')` already exists
+    if (!fileContent.includes("app.get('/health'")) {
+        console.log("Adding health check endpoint...");
+
+        // Insert the health check route
+        const healthCheckCode = `
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+});
+`;
+        // Add the route before `app.listen`
+        fileContent = fileContent.replace(/app.listen\(\d+.*,/, match => healthCheckCode + "\n" + match);
+
+        modified = true;
+    }
+
+    return modified ? fileContent : fileContent;
+}
 
 
 
@@ -1026,36 +1101,36 @@ function detectCircuitBreakerIssues(ast: any, file: string): string[] {
     let breakerVariables: Set<string> = new Set(); // Stores variable names that are CircuitBreaker instances
 
     // Step 1: Traverse to find any CircuitBreaker instances and store their variable names
-    
 
-// Step 1: Traverse to find any CircuitBreaker instances and store their variable names
-walkAncestor(ast, {
-    NewExpression(node, state, ancestors) {
-        if (node.callee.type === "Identifier" && node.callee.name === "CircuitBreaker") {
-            // Find the closest ancestor that is a variable declaration
-            for (let i = ancestors.length - 1; i >= 0; i--) {
-                const ancestor = ancestors[i] as estree.Node; // Explicitly type as Node
 
-                // ✅ Type-check: Ensure ancestor is a VariableDeclarator
-                if (
-                    ancestor &&
-                    ancestor.type === "VariableDeclarator"
-                ) {
-                    const declarator = ancestor as estree.VariableDeclarator;
+    // Step 1: Traverse to find any CircuitBreaker instances and store their variable names
+    walkAncestor(ast, {
+        NewExpression(node, state, ancestors) {
+            if (node.callee.type === "Identifier" && node.callee.name === "CircuitBreaker") {
+                // Find the closest ancestor that is a variable declaration
+                for (let i = ancestors.length - 1; i >= 0; i--) {
+                    const ancestor = ancestors[i] as estree.Node; // Explicitly type as Node
 
-                    // ✅ Ensure `id` exists and is an `Identifier`
+                    // ✅ Type-check: Ensure ancestor is a VariableDeclarator
                     if (
-                        declarator.id &&
-                        declarator.id.type === "Identifier"
+                        ancestor &&
+                        ancestor.type === "VariableDeclarator"
                     ) {
-                        breakerVariables.add(declarator.id.name); // Store the variable name
-                        break;
+                        const declarator = ancestor as estree.VariableDeclarator;
+
+                        // ✅ Ensure `id` exists and is an `Identifier`
+                        if (
+                            declarator.id &&
+                            declarator.id.type === "Identifier"
+                        ) {
+                            breakerVariables.add(declarator.id.name); // Store the variable name
+                            break;
+                        }
                     }
                 }
             }
         }
-    }
-});
+    });
 
 
     // Step 2: Traverse again to check if breaker.fire() is being used
