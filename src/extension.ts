@@ -86,6 +86,8 @@ class HealOpsPanel {
                         applyFixHealthCheckIssue(message.issue);
                     } else if (message.issue.includes('Secure headers middleware (helmet) is missing')) {
                         applyFixSecureHeadersIssue(message.issue);
+                    } else if (message.issue.includes('Missing input validation middleware')) {
+                        applyFixInputValidationIssue(message.issue);
                     }
                     else {
                         vscode.window.showInformationMessage('Fixing still under work');
@@ -1026,6 +1028,7 @@ app.get('/health', (req, res) => {
     return modified ? fileContent : fileContent;
 }
 
+//8 fix secure headers
 async function applyFixSecureHeadersIssue(issue: string) {
     console.log("Fixing secure headers issue for:", issue);
 
@@ -1097,6 +1100,109 @@ function fixSecureHeadersIssues(fileContent: string): string {
 
     return modified ? fileContent : fileContent;
 }
+
+//9 fix input validation
+async function applyFixInputValidationIssue(issue: string) {
+    console.log("Applying input validation fix for:", issue);
+
+    // Extract the file name from the issue message
+    const match = issue.match(/^(.+?) - /);
+    if (!match) {
+        vscode.window.showErrorMessage('❌ Invalid issue format.');
+        return;
+    }
+
+    const fileName = match[1].trim();
+    console.log(`📌 Extracted file name: ${fileName}`);
+
+    // Ensure a workspace is open
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        vscode.window.showErrorMessage("❌ No workspace found.");
+        return;
+    }
+
+    const projectRoot = workspaceFolders[0].uri.fsPath;
+    const allFiles = getAllJsTsFiles(projectRoot);
+    const filePath = allFiles.find(file => path.basename(file) === fileName);
+
+    if (!filePath) {
+        vscode.window.showErrorMessage(`❌ Error: File not found in workspace - ${fileName}`);
+        return;
+    }
+
+    console.log(`✅ Target file for fix: ${filePath}`);
+
+    // Read the file content
+    let text = fs.readFileSync(filePath, "utf8");
+    console.log(`📄 Original Content:\n${text}`);
+
+    // Apply fix for input validation
+    const fixedCode = fixInputValidationIssues(text);
+
+    // If no changes were made, inform the user
+    if (fixedCode === text) {
+        vscode.window.showInformationMessage(`✅ No changes needed in ${filePath}.`);
+        return;
+    }
+
+    // Save the modified content back to the file
+    try {
+        fs.writeFileSync(filePath, fixedCode, "utf8");
+        console.log(`✅ Successfully updated ${filePath}`);
+
+        // Ensure VSCode refreshes the document to reflect changes
+        const document = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(document);
+        await document.save();
+
+        vscode.window.showInformationMessage(`✅ Input validation issue fixed in ${filePath}`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`❌ Failed to update ${filePath} - ${error}`);
+        return;
+    }
+}
+
+
+
+
+
+
+function fixInputValidationIssues(fileContent: string): string {
+    let modified = false;
+
+    // Ensure express-validator import is present
+    if (!fileContent.includes("const { check, validationResult } = require('express-validator');")) {
+        fileContent = "const { check, validationResult } = require('express-validator');\n" + fileContent;
+        modified = true;
+    }
+
+    // Ensure express.json() middleware is present
+    if (!fileContent.includes("app.use(express.json())")) {
+        fileContent = fileContent.replace(
+            /const app = express\(\);/,
+            "const app = express();\napp.use(express.json());"
+        );
+        modified = true;
+    }
+
+    // Fix missing validation in routes
+    const routeRegex = /(app\.(post|put)\(['"`]\/[^'"`]+['"`],\s*\[?)/g;
+    fileContent = fileContent.replace(routeRegex, (match, prefix) => {
+        if (!match.includes("[check(")) {
+            modified = true;
+            return `${prefix}[check('param').notEmpty().withMessage('Parameter is required')], `;
+        }
+        return match;
+    });
+
+    return modified ? fileContent : fileContent;
+}
+
+
+
+
+
 
 
 
@@ -1410,15 +1516,29 @@ function detectInputValidationIssues(ast: any, file: string): string[] {
                 node.callee.type === 'MemberExpression' &&
                 node.callee.object.type === 'Identifier' &&
                 node.callee.object.name === 'app' &&
-                node.callee.property.type === 'Identifier' && // Ensure property is an Identifier
-                ['get', 'post', 'put', 'delete'].includes(node.callee.property.name) // Check HTTP method
+                node.callee.property.type === 'Identifier' &&
+                ['post', 'put'].includes(node.callee.property.name) // Only check POST & PUT requests
             ) {
                 const routePath = node.arguments[0]; // First argument (route path)
-                const routeHandler = node.arguments[1]; // Second argument (route handler)
+                const middlewareArg = node.arguments[1]; // Middleware or route handler
 
-                // Ensure routePath is a Literal (string)
                 if (routePath && routePath.type === 'Literal' && typeof routePath.value === 'string') {
-                    if (routeHandler?.type === 'Identifier' && !routeHandler.name.includes('validate')) {
+                    let hasValidation = false;
+
+                    // Ensure middleware argument exists and contains validation
+                    if (middlewareArg && middlewareArg.type === 'ArrayExpression' && middlewareArg.elements) {
+                        hasValidation = middlewareArg.elements.some(
+                            (element) =>
+                                element &&
+                                element.type === 'CallExpression' &&
+                                element.callee &&
+                                element.callee.type === 'Identifier' &&
+                                ['check', 'body', 'param', 'query'].includes(element.callee.name)
+                        );
+                    }
+
+                    // If no validation middleware is found, report the issue
+                    if (!hasValidation) {
                         issues.push(`${file} - Missing input validation middleware for route: ${routePath.value}`);
                     }
                 }
@@ -1428,6 +1548,9 @@ function detectInputValidationIssues(ast: any, file: string): string[] {
 
     return issues;
 }
+
+
+
 
 
 // Deactivate extension
