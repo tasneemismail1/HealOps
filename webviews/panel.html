@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealOps - Microservices Scanner</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+        h2 { color: #007acc; }
+        button { padding: 10px; background: #007acc; color: white; border: none; cursor: pointer; margin-bottom: 10px; font-size: 14px; }
+        button:hover { background: #005999; }
+        #progress-container { width: 100%; background: #ccc; height: 10px; border-radius: 5px; margin-top: 10px; }
+        #progress-bar { height: 10px; width: 0%; background: #007acc; border-radius: 5px; transition: width 0.3s ease-in-out; }
+        #issues { margin-top: 20px; background: white; padding: 10px; border-radius: 5px; box-shadow: 0px 0px 5px rgba(0,0,0,0.2); }
+        .issue-item { border-bottom: 1px solid #ddd; padding: 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .fix-btn { background: green; color: white; padding: 5px; cursor: pointer; border: none; border-radius: 3px; font-size: 12px; }
+        .fix-btn:hover { background: darkgreen; }
+        .no-issues { color: #555; text-align: center; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h2>HealOps - Microservices Scanner</h2>
+    <button id="scanButton">🔍 Scan Project</button>
+    <div id="progress-container"><div id="progress-bar"></div></div>
+    <div id="issues"></div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        document.getElementById('scanButton').addEventListener('click', () => {
+            vscode.postMessage({ command: 'scan' });
+        });
+
+        window.addEventListener('message', event => {
+            const { command, data, progress } = event.data;
+
+            if (command === 'updateIssues') {
+                const issuesContainer = document.getElementById('issues');
+                issuesContainer.innerHTML = '';
+
+                if (data.length === 0) {
+                    issuesContainer.innerHTML = '<p class="no-issues">✅ No issues detected!</p>';
+                } else {
+                    issuesContainer.innerHTML = data.map(issue =>
+                        `<div class="issue-item">
+                            ${issue}
+                            <button class="fix-btn" onclick="fixIssue('${issue}')">Fix</button>
+                        </div>`
+                    ).join('');
+                }
+            } else if (command === 'updateProgress') {
+                document.getElementById('progress-bar').style.width = progress + '%';
+            }
+        });
+
+        function fixIssue(issue) {
+            vscode.postMessage({ command: 'fixIssue', issue });
+        }
+    </script>
+</body>
+</html>
