@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { scanProject } from '../commands/scanProject';
 
 // Import only `applyFixIssue` functions
@@ -11,7 +13,6 @@ import { applyFixLoggingIssue } from '../fixes/fixLogging';
 import { applyFixRateLimitingIssue } from '../fixes/fixRateLimiting';
 import { applyFixSecureHeadersIssue } from '../fixes/fixSecureHeaders';
 import { applyFixInputValidationIssue } from '../fixes/fixInputValidation';
-
 
 export class HealOpsPanel {
     public static currentPanel: HealOpsPanel | undefined;
@@ -93,56 +94,24 @@ export class HealOpsPanel {
         );
     }
 
+    // Load HTML from panel.html dynamically
+    private _getHtmlForWebview(): string {
+        const filePath = path.join(this._extensionUri.fsPath, 'webviews', 'panel.html');
 
-    // HTML content for the webview panel
-    private _getHtmlForWebview() {
-        return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>HealOps Scanner</title>
-            <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                button { padding: 10px; background: #007acc; color: white; border: none; cursor: pointer; margin-bottom: 10px; }
-                #progress { width: 100%; background: #ccc; height: 10px; }
-                #progress-bar { height: 10px; width: 0%; background: #007acc; }
-                #issues { margin-top: 20px; }
-                .issue-item { border-bottom: 1px solid #ddd; padding: 10px; }
-                .fix-btn { background: green; color: white; padding: 5px; cursor: pointer; border: none; }
-            </style>
-        </head>
-        <body>
-            <h2>HealOps - Microservices Scanner</h2>
-            <button id="scanButton">🔍 Scan Project</button>
-            <div id="progress"><div id="progress-bar"></div></div>
-            <div id="issues"></div>
+        try {
+            let htmlContent = fs.readFileSync(filePath, 'utf8');
 
-            <script>
-                const vscode = acquireVsCodeApi();
+            // Inject URIs for styles and scripts
+            const cssUri = this._panel.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'webviews', 'panel.css')
+            );
 
-                document.getElementById('scanButton').addEventListener('click', () => {
-                    vscode.postMessage({ command: 'scan' });
-                });
+            htmlContent = htmlContent.replace('{{styleUri}}', cssUri.toString());
 
-                window.addEventListener('message', event => {
-                    const { command, data, progress } = event.data;
-                    if (command === 'updateIssues') {
-                        document.getElementById('issues').innerHTML =
-                            data.map(issue =>
-                                \`<div class="issue-item">\${issue}
-                                <button class="fix-btn" onclick="fixIssue('\${issue}')">Fix</button></div>\`
-                            ).join('');
-                    } else if (command === 'updateProgress') {
-                        document.getElementById('progress-bar').style.width = progress + '%';
-                    }
-                });
-
-                function fixIssue(issue) {
-                    vscode.postMessage({ command: 'fixIssue', issue });
-                }
-            </script>
-        </body>
-        </html>`;
+            return htmlContent;
+        } catch (error) {
+            vscode.window.showErrorMessage(`❌ Failed to load HealOps webview: ${error}`);
+            return `<h1>Error loading HealOps UI</h1>`;
+        }
     }
 }
