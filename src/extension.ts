@@ -60,15 +60,15 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // In activate()
-        vscode.commands.registerCommand('healops.applyFix', (file: string, issue: string) => {
-            if (!file || !issue) {
-                vscode.window.showErrorMessage("Invalid fix target.");
-                return;
-            }
+        // vscode.commands.registerCommand('healops.applyFix', (file: string, issue: string) => {
+        //     if (!file || !issue) {
+        //         vscode.window.showErrorMessage("Invalid fix target.");
+        //         return;
+        //     }
 
-            // 👇 Use the preview panel for now until Apply logic is implemented
-            PreviewFixPanel.show(file, issue);
-        });
+        //     // 👇 Use the preview panel for now until Apply logic is implemented
+        //     PreviewFixPanel.show(file, issue);
+        // });
 
 
     vscode.commands.registerCommand('healops.ignoreFix', (file: string, issue: string) => {
