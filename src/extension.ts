@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
-import { HealOpsPanel } from './ui/HealOpsPanel';
-import { scanProject } from './commands/scanProject';
+import * as path from 'path';
 
-// Import fixing functions
+import { HealOpsPanel } from './ui/HealOpsPanel';
+import { PreviewFixPanel } from './ui/PreviewFixPanel';
+import { scanProject } from './commands/scanProject';
+import { HealOpsTreeProvider } from './HealOpsTreeProvider';
+
+// AST-based fix imports
 import { applyFixRetryIssue } from './fixes/fixRetry';
 import { applyFixCircuitBreakerIssue } from './fixes/fixCircuitBreaker';
 import { applyFixHealthCheckIssue } from './fixes/fixHealthCheck';
@@ -13,28 +17,69 @@ import { applyFixRateLimitingIssue } from './fixes/fixRateLimiting';
 import { applyFixSecureHeadersIssue } from './fixes/fixSecureHeaders';
 import { applyFixInputValidationIssue } from './fixes/fixInputValidation';
 
-/**
- * Activates the VSCode extension
- */
 export function activate(context: vscode.ExtensionContext) {
     console.log('✅ HealOps extension activated');
 
-    // Register the command for opening the UI panel
-    let openPanelCommand = vscode.commands.registerCommand('healops.openPanel', () => {
-        HealOpsPanel.createOrShow(context.extensionUri);
-    });
+    const treeDataProvider = new HealOpsTreeProvider();
+    vscode.window.createTreeView('healopsIssuesView', { treeDataProvider });
 
-    // Register the command for scanning the project
-    let scanCommand = vscode.commands.registerCommand('healops.scanProject', async () => {
-        const issues = await scanProject((progress) => {
-            vscode.window.setStatusBarMessage(`Scanning: ${progress}%`);
+    context.subscriptions.push(
+        vscode.commands.registerCommand('healops.openPanel', () => {
+            HealOpsPanel.createOrShow(context.extensionUri);
+        }),
+
+        vscode.commands.registerCommand('healops.scanMicroservices', async () => {
+            const issues = await scanProject(progress =>
+                vscode.window.setStatusBarMessage(`Scanning: ${progress}%`)
+            );
+
+            const grouped: Record<string, string[]> = {};
+            for (const full of issues) {
+                const [file, message] = full.split(' - ');
+                if (!grouped[file]) grouped[file] = [];
+                grouped[file].push(message);
+            }
+
+            treeDataProvider.refresh(grouped);
+
+            vscode.window.showInformationMessage(
+                issues.length
+                    ? `Scan completed! Detected ${issues.length} issues.`
+                    : 'Scan completed! No issues found 🎉'
+            );
+        }),
+
+        vscode.commands.registerCommand('healops.previewFix', async (file: string, issue: string) => {
+            if (!file || !issue) return vscode.window.showErrorMessage('Missing file or issue.');
+            const filePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, file);
+            const doc = await vscode.workspace.openTextDocument(filePath);
+            const editor = await vscode.window.showTextDocument(doc);
+            await editor.edit(editBuilder => {
+                editBuilder.insert(new vscode.Position(0, 0), `// 🔧 Suggested Fix: ${issue}\n`);
+            });
+        }),
+
+        // In activate()
+        vscode.commands.registerCommand('healops.applyFix', (file: string, issue: string) => {
+            if (!file || !issue) {
+                vscode.window.showErrorMessage("Invalid fix target.");
+                return;
+            }
+
+            // 👇 Use the preview panel for now until Apply logic is implemented
+            PreviewFixPanel.show(file, issue);
         });
 
-        vscode.window.showInformationMessage(`Scan completed! Detected ${issues.length} issues.`);
-    });
 
-    // Register the commands for applying fixes
-    let fixCommands = [
+    vscode.commands.registerCommand('healops.ignoreFix', (file: string, issue: string) => {
+        if (!file || !issue) return vscode.window.showErrorMessage('Missing file or issue.');
+        const map = treeDataProvider.getIssueMap();
+        const updated = (map.get(file) || []).map(i => (i === issue ? `⚠️ Ignored: ${i}` : i));
+        map.set(file, updated);
+        treeDataProvider.refresh(Object.fromEntries(map));
+        vscode.window.showWarningMessage(`❌ Ignored fix: ${issue}`);
+    }),
+
         vscode.commands.registerCommand('healops.fixRetry', applyFixRetryIssue),
         vscode.commands.registerCommand('healops.fixCircuitBreaker', applyFixCircuitBreakerIssue),
         vscode.commands.registerCommand('healops.fixHealthCheck', applyFixHealthCheckIssue),
@@ -43,16 +88,10 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('healops.fixLogging', applyFixLoggingIssue),
         vscode.commands.registerCommand('healops.fixRateLimiting', applyFixRateLimitingIssue),
         vscode.commands.registerCommand('healops.fixSecureHeaders', applyFixSecureHeadersIssue),
-        vscode.commands.registerCommand('healops.fixInputValidation', applyFixInputValidationIssue),
-    ];
-
-    // Store commands in subscriptions
-    context.subscriptions.push(openPanelCommand, scanCommand, ...fixCommands);
+        vscode.commands.registerCommand('healops.fixInputValidation', applyFixInputValidationIssue)
+  );
 }
 
-/**
- * Deactivates the extension (cleanup if needed)
- */
 export function deactivate() {
     console.log('❌ HealOps extension deactivated');
 }

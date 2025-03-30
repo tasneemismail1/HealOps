@@ -29,36 +29,74 @@
     "onCommand:healops.openPanel"
   ],
   "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
+ "contributes": {
+  "commands": [
+  {
+    "command": "healops.scanMicroservices",
+    "title": "Scan Microservices",
+    "category": "HealOps"
+  },
+  {
+    "command": "healops.openPanel",
+    "title": "Open HealOps Scanner",
+    "category": "HealOps"
+  },
+  {
+    "command": "healops.previewFix",
+    "title": "Preview Fix",
+    "category": "HealOps"
+  },
+  {
+    "command": "healops.applyFix",
+    "title": "Apply Fix",
+    "category": "HealOps"
+  },
+  {
+    "command": "healops.ignoreFix",
+    "title": "Ignore Fix",
+    "category": "HealOps"
+  }
+  ],
+  "viewsContainers": {
+    "activitybar": [
       {
-        "command": "healops.scanMicroservices",
-        "title": "Scan Microservices",
-        "category": "HealOps"
-      },
-      {
-        "command": "healops.openPanel",
-        "title": "Open HealOps Scanner",
-        "category": "HealOps"
+        "id": "healops",
+        "title": "HealOps",
+        "icon": "media/icon.png"
       }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "healops",
-          "title": "HealOps",
-          "icon": "media/icon.png"
-        }
-      ]
+    ]
+  },
+  "views": {
+    "healops": [
+      {
+        "id": "healopsIssuesView",
+        "name": "Issues"
+      }
+    ]
+  },
+  "menus": {
+  "view/item/context": [
+    {
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
+      "command": "healops.applyFix",
+      "group": "inline",
+      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
     },
-    "views": {
-      "healops": [
-        {
-          "id": "healopsPanel",
-          "name": "HealOps Scanner"
-        }
-      ]
+    {
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
+      "command": "healops.ignoreFix",
+      "group": "inline",
+      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
+    },
+    {
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
+      "command": "healops.previewFix",
+      "group": "inline",
+      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
     }
+  ]
+}
+
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
