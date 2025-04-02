@@ -86,7 +86,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                                             {
                                                 type: "ArrowFunctionExpression",
                                                 params: [],
-                                                body: innerNode, // Preserve the existing API call
+                                                body: innerNode,
                                                 async: true,
                                             },
                                             {
@@ -131,20 +131,37 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
     });
 
     // Step 5: Add `opossum` import if missing
-    if (!hasCircuitBreakerImport) {
-        return `const CircuitBreaker = require('opossum');\n\n` + escodegen.generate(ast);
+    const generatedCode = escodegen.generate(ast);
+    const alreadyDeclared = /(const|let|var)\s+CircuitBreaker/.test(generatedCode)
+        || generatedCode.includes("require('opossum')")
+        || generatedCode.includes('from "opossum"');
+
+    if (!hasCircuitBreakerImport && !alreadyDeclared) {
+        return `const CircuitBreaker = require('opossum');
+
+` + generatedCode;
     }
 
-    return escodegen.generate(ast);
+    return generatedCode;
 }
+
 export function getFixedCodeCircuitBreaker(originalCode: string): string {
     const ast = parseAst(originalCode);
-  
+
     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for circuitBreaker
-      return false;
+        return false;
     });
-  
+
     return modifiedCode || originalCode;
-  }
-  
+}
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    const fixedCode = fixCircuitBreakerIssues
+        ? fixCircuitBreakerIssues(parseAst(text), filePath)
+        : text;
+
+    return fixedCode || text;
+}

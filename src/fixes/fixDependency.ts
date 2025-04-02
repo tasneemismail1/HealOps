@@ -145,3 +145,15 @@ function fixDependencyIssues(ast: any, file: string): string {
 
     return codeModified ? escodegen.generate(ast) : "";
 }
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    // Modify this call to reuse your existing fix logic
+    const fixedCode = fixDependencyIssues
+        ? fixDependencyIssues(text, filePath)
+        : text;
+
+    return fixedCode || text;
+}

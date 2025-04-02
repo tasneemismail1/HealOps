@@ -150,3 +150,15 @@ function fixTimeoutIssues(ast: any, file: string): string {
     // If modifications were made, return the updated code; otherwise, return an empty string
     return codeModified ? escodegen.generate(ast, { format: { indent: { style: "  " } } }) : "";
 }
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    // Modify this call to reuse your existing fix logic
+    const fixedCode = fixTimeoutIssues
+        ? fixTimeoutIssues(text,filePath)
+        : text;
+
+    return fixedCode || text;
+}
