@@ -62,7 +62,7 @@
       {
         "id": "healops",
         "title": "HealOps",
-        "icon": "media/icon.png"
+        "icon": "images/Healopslogo.jpeg"
       }
     ]
   },
@@ -77,23 +77,23 @@
   "menus": {
   "view/item/context": [
     {
-      "when": "view == healopsIssuesView && viewItem == healopsIssue",
-      "command": "healops.applyFix",
-      "group": "inline",
-      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
-    },
-    {
-      "when": "view == healopsIssuesView && viewItem == healopsIssue",
-      "command": "healops.ignoreFix",
-      "group": "inline",
-      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
-    },
-    {
-      "when": "view == healopsIssuesView && viewItem == healopsIssue",
       "command": "healops.previewFix",
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
       "group": "inline",
       "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
-    }
+    },
+    {
+      "command": "healops.applyFix",
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
+      "group": "inline",
+      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
+    },
+    {
+      "command": "healops.ignoreFix",
+      "when": "view == healopsIssuesView && viewItem == healopsIssue",
+      "group": "inline",
+      "args": ["${viewItem.fileName}", "${viewItem.issueText}"]
+    }    
   ]
 }
 

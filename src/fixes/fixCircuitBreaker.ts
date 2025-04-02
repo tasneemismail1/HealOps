@@ -4,6 +4,7 @@ import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import { ancestor as walkAncestor } from "acorn-walk";
 import * as escodegen from "escodegen";
+import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
 export async function applyFixCircuitBreakerIssue(issue: string) {
     console.log("Fixing circuit breaker issue for:", issue);
@@ -136,3 +137,14 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
 
     return escodegen.generate(ast);
 }
+export function getFixedCodeCircuitBreaker(originalCode: string): string {
+    const ast = parseAst(originalCode);
+  
+    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+      // TODO: Replace this condition with real logic for circuitBreaker
+      return false;
+    });
+  
+    return modifiedCode || originalCode;
+  }
+  

@@ -1,44 +1,41 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export class PreviewFixPanel {
-  public static show(file: string, issue: string) {
-    const workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-    if (!workspacePath) return;
-
-    const filePath = path.join(workspacePath, file);
-    const originalCode = fs.readFileSync(filePath, 'utf-8');
-
-    const fixedCode = `// 🔧 Suggested fix: ${issue}\n\n${originalCode}`;
-
+  public static show(file: string, issue: string, original: string, fixed: string) {
     const panel = vscode.window.createWebviewPanel(
       'previewFix',
       `Preview Fix: ${issue}`,
       vscode.ViewColumn.One,
-      { enableScripts: false }
+      { enableScripts: true }
     );
 
-    panel.webview.html = PreviewFixPanel.getWebviewContent(originalCode, fixedCode);
-  }
-
-  private static getWebviewContent(original: string, fixed: string): string {
-    return `
-      <html>
-        <body style="font-family: monospace;">
-          <h2>Preview Fix</h2>
-          <div style="display: flex; gap: 20px;">
-            <div style="width: 50%;">
-              <h3>🟥 Original</h3>
-              <pre>${original.replace(/</g, '&lt;')}</pre>
-            </div>
-            <div style="width: 50%;">
-              <h3>🟩 With Suggested Fix</h3>
-              <pre>${fixed.replace(/</g, '&lt;')}</pre>
-            </div>
+    panel.webview.html = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <style>
+          body { font-family: monospace; padding: 10px; background-color: #282c34; color: white; }
+          .container { display: flex; gap: 20px; }
+          .code-box { flex: 1; padding: 10px; overflow: auto; height: 90vh; }
+          .original { background-color: #ffdddd; color: #000; }
+          .fixed { background-color: #ddffdd; color: #000; }
+          pre { white-space: pre-wrap; word-wrap: break-word; }
+          h2 { border-bottom: 1px solid gray; }
+        </style>
+      </head>
+      <body>
+        <h2>Fix Preview: ${issue}</h2>
+        <div class="container">
+          <div class="code-box original">
+            <h3>🟥 Original</h3>
+            <pre>${original.replace(/</g, '&lt;')}</pre>
           </div>
-        </body>
-      </html>
-    `;
+          <div class="code-box fixed">
+            <h3>🟩 Fixed</h3>
+            <pre>${fixed.replace(/</g, '&lt;')}</pre>
+          </div>
+        </div>
+      </body>
+    </html>`;
   }
 }

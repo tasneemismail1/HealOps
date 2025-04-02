@@ -3,6 +3,21 @@ import * as path from 'path';
 import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import * as escodegen from "escodegen";
+import { parseAst, modifyAstAndGenerateCode } from '../utils/astUtils';
+
+export function getFixedCodeRetry(originalCode: string): string {
+  const ast = parseAst(originalCode);
+
+  const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+    return (
+      node.type === 'CallExpression' &&
+      node.callee.name === 'fetchData' &&
+      !node.arguments.some((arg: { type: string; value: string; }) => arg.type === 'Literal' && arg.value === 'retry')
+    );
+  });
+
+  return modifiedCode || originalCode;
+}
 
 export async function applyFixRetryIssue(issue: string) {
     console.log("Fixing retry issue for:", issue);
@@ -63,6 +78,7 @@ export async function applyFixRetryIssue(issue: string) {
     }
 }
 
+  
 /**
  * Adds retry logic around detected API calls.
  */

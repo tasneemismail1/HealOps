@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
+import { basename } from 'path';
 
 export class HealOpsTreeProvider implements vscode.TreeDataProvider<HealOpsItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<HealOpsItem | undefined | null | void> = new vscode.EventEmitter();
-  readonly onDidChangeTreeData: vscode.Event<HealOpsItem | undefined | null | void> = this._onDidChangeTreeData.event;
+  private _onDidChangeTreeData = new vscode.EventEmitter<HealOpsItem | undefined>();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private issueMap: Map<string, string[]> = new Map();
+  private issueMap = new Map<string, string[]>();
 
   refresh(issuesByFile: Record<string, string[]>) {
     this.issueMap = new Map(Object.entries(issuesByFile));
-    this._onDidChangeTreeData.fire();
+    this._onDidChangeTreeData.fire(undefined);
   }
 
   getTreeItem(element: HealOpsItem): vscode.TreeItem {
@@ -17,33 +18,34 @@ export class HealOpsTreeProvider implements vscode.TreeDataProvider<HealOpsItem>
 
   getChildren(element?: HealOpsItem): Thenable<HealOpsItem[]> {
     if (!element) {
-      // Root level: file names
-      return Promise.resolve([...this.issueMap.keys()].map(file =>
-        new HealOpsItem(file, vscode.TreeItemCollapsibleState.Collapsed, undefined, true)
-      ));
+      return Promise.resolve(
+        [...this.issueMap.keys()].map(
+          file => new HealOpsItem(
+            basename(file), 
+            vscode.TreeItemCollapsibleState.Collapsed, 
+            undefined,
+            true,
+            file // ✅ store full path here explicitly
+          )
+        )
+      );
     }
 
     if (element.isFile) {
-      const file = element.label;
-      const issues = this.issueMap.get(file) || [];
+      const filePath = element.filePath!;
+      const issues = this.issueMap.get(filePath) || [];
 
       return Promise.resolve(
         issues.map(issue => {
           const item = new HealOpsItem(
             issue,
             vscode.TreeItemCollapsibleState.None,
-            {
-              command: 'healops.previewFix',
-              title: 'Preview Fix',
-              arguments: [file, issue]
-            },
-            false
+            undefined,
+            false,
+            filePath
           );
-
-          // ✅ Explicitly set fields for use in package.json args
-          (item as any).fileName = file;
-          (item as any).issueText = issue;
-
+          item.fileName = filePath;
+          item.issueText = issue;
           return item;
         })
       );
@@ -58,13 +60,18 @@ export class HealOpsTreeProvider implements vscode.TreeDataProvider<HealOpsItem>
 }
 
 export class HealOpsItem extends vscode.TreeItem {
+  fileName?: string;
+  issueText?: string;
+
   constructor(
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly command?: vscode.Command,
-    public readonly isFile: boolean = false
+    command?: vscode.Command,
+    public readonly isFile = false,
+    public readonly filePath?: string
   ) {
     super(label, collapsibleState);
+    this.command = command;
     this.contextValue = isFile ? 'healopsFile' : 'healopsIssue';
   }
 }
