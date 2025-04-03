@@ -152,7 +152,7 @@ export async function applyFix(filePath: string): Promise<string> {
 
     // Modify this call to reuse your existing fix logic
     const fixedCode = fixDependencyIssues
-        ? fixDependencyIssues(text, filePath)
+        ? fixDependencyIssues(parseAst(text), filePath)
         : text;
 
     return fixedCode || text;

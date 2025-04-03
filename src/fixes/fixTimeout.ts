@@ -14,7 +14,7 @@ export function getFixedCodeTimeout(originalCode: string): string {
     });
   
     return modifiedCode || originalCode;
-  }
+}
   
 
 export async function applyFixTimeoutIssue(issue: string) {
@@ -157,7 +157,7 @@ export async function applyFix(filePath: string): Promise<string> {
 
     // Modify this call to reuse your existing fix logic
     const fixedCode = fixTimeoutIssues
-        ? fixTimeoutIssues(text,filePath)
+        ? fixTimeoutIssues(parseAst(text),filePath)
         : text;
 
     return fixedCode || text;
