@@ -84,3 +84,15 @@ function fixLoggingIssues(fileContent: string): string {
 
     return changesMade ? modifiedCode : fileContent; // Return modified or original content
 }
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    // Modify this call to reuse your existing fix logic
+    const fixedCode = fixLoggingIssues
+        ? fixLoggingIssues(text)
+        : text;
+
+    return fixedCode || text;
+}

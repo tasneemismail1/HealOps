@@ -198,3 +198,15 @@ function fixRetryIssues(ast: any, file: string): string {
     console.log("Generated fixed code:", escodegen.generate(ast, { format: { indent: { style: "  " } } }));
     return escodegen.generate(ast, { format: { indent: { style: "  " } } });
 }
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    // Modify this call to reuse your existing fix logic
+    const fixedCode = fixRetryIssues
+        ? fixRetryIssues(text, filePath)
+        : text;
+
+    return fixedCode || text;
+}

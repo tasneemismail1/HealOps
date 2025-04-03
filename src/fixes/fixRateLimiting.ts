@@ -98,3 +98,15 @@ function fixRateLimitingIssues(fileContent: string): string {
     console.log(`🔧 Fix Applied: ${modified}`);
     return modified ? fileContent : fileContent;
 }
+
+export async function applyFix(filePath: string): Promise<string> {
+    const document = await vscode.workspace.openTextDocument(filePath);
+    const text = document.getText();
+
+    // Modify this call to reuse your existing fix logic
+    const fixedCode = fixRateLimitingIssues
+        ? fixRateLimitingIssues(text)
+        : text;
+
+    return fixedCode || text;
+}
