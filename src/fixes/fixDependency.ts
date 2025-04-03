@@ -83,58 +83,72 @@ function fixDependencyIssues(ast: any, file: string): string {
                 const className = node.callee.name;
                 const paramName = `inject${className}`;
 
-                // Find the parent function/class where the `new` is used
                 const parentClassNode = ancestors.find(ancestor => ancestor.type === 'ClassDeclaration');
-                const parentFunctionNode = ancestors.find(ancestor => ancestor.type === 'FunctionDeclaration' || ancestor.type === 'FunctionExpression' || ancestor.type === 'ArrowFunctionExpression');
+                const parentFunctionNode = ancestors.find(ancestor => 
+                    ancestor.type === 'FunctionDeclaration' || 
+                    ancestor.type === 'FunctionExpression' || 
+                    ancestor.type === 'ArrowFunctionExpression');
 
                 if (parentClassNode) {
-                    // Convert `this.db = new Database();` → Inject in constructor
                     let constructorNode = parentClassNode.body.body.find((method: any) => method.kind === 'constructor');
 
                     if (!constructorNode) {
-                        // Create a constructor if it doesn't exist
                         constructorNode = {
                             type: 'MethodDefinition',
                             kind: 'constructor',
                             key: { type: 'Identifier', name: 'constructor' },
-                            value: { type: 'FunctionExpression', params: [], body: { type: 'BlockStatement', body: [] }, },
+                            value: { type: 'FunctionExpression', params: [], body: { type: 'BlockStatement', body: [] } },
                         };
                         parentClassNode.body.body.unshift(constructorNode);
                     }
 
-                    // Ensure the constructor has a `params` array
                     if (!constructorNode.value.params) {
                         constructorNode.value.params = [];
                     }
 
-                    // Ensure constructor takes the dependency as a parameter
                     if (!constructorNode.value.params.some((param: any) => param.type === 'Identifier' && param.name === paramName)) {
-                        constructorNode.value.params.unshift({ type: 'Identifier', name: paramName, });
+                        constructorNode.value.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
-                    // Replace `new ClassName()` with the injected parameter
                     const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
+                    const originalCode = escodegen.generate(node);
 
                     if (assignmentNode && assignmentNode.right === node) {
                         assignmentNode.right = { type: 'Identifier', name: paramName };
+
+                        // Insert a comment above the assignment with the original line
+                        if (!assignmentNode.leadingComments) {
+                            assignmentNode.leadingComments = [];
+                        }
+                        assignmentNode.leadingComments.push({
+                            type: 'Line',
+                            value: ` original: ${originalCode}`
+                        });
                     }
 
                     codeModified = true;
                 } else if (parentFunctionNode) {
-                    // Handle function-level injection
                     if (!Array.isArray(parentFunctionNode.params)) {
                         parentFunctionNode.params = [];
                     }
 
                     if (!parentFunctionNode.params.some((param: any) => param.type === 'Identifier' && param.name === paramName)) {
-                        parentFunctionNode.params.unshift({ type: 'Identifier', name: paramName, });
+                        parentFunctionNode.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
-                    // Replace `new ClassName()` with the injected parameter
                     const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
+                    const originalCode = escodegen.generate(node);
 
                     if (assignmentNode && assignmentNode.right === node) {
-                        assignmentNode.right = { type: 'Identifier', name: paramName, };
+                        assignmentNode.right = { type: 'Identifier', name: paramName };
+
+                        if (!assignmentNode.leadingComments) {
+                            assignmentNode.leadingComments = [];
+                        }
+                        assignmentNode.leadingComments.push({
+                            type: 'Line',
+                            value: ` original: ${originalCode}`
+                        });
                     }
 
                     codeModified = true;
@@ -143,8 +157,9 @@ function fixDependencyIssues(ast: any, file: string): string {
         },
     });
 
-    return codeModified ? escodegen.generate(ast) : "";
+    return codeModified ? escodegen.generate(ast, { comment: true }) : "";
 }
+
 
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
