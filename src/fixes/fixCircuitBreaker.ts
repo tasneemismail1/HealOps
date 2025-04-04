@@ -1,31 +1,48 @@
+// VS Code API modules for file handling and workspace path resolution
 import * as vscode from 'vscode';
 import * as path from 'path';
+
+// Acorn to parse JavaScript/TypeScript into AST
 import * as acorn from 'acorn';
 import { ancestor as walkAncestor } from "acorn-walk";
+
+// ESTree-compliant code generator for turning AST back into JS code
 import * as escodegen from "escodegen";
 import * as estree from 'estree';
+
+// Utility functions for parsing and modifying AST
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
+/**
+ * Entry point to apply a circuit breaker fix on a given issue.
+ * This function identifies the API call, modifies the AST, generates the new code,
+ * and replaces the old file content with the new one.
+ */
 export async function applyFixCircuitBreakerIssue(issue: string) {
     console.log("Fixing circuit breaker issue for:", issue);
 
+    // Extract file name from issue string
     const file = issue.split(" - ")[0].trim();
     const fileName = path.basename(file);
 
+    // Validate workspace context
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         console.error("No workspace folders found.");
         return null;
     }
 
+    // Build full path to the target file
     const directory = workspaceFolders[0].uri.fsPath;
     const filePath = path.join(directory, fileName);
 
     try {
+        // Open and parse the target file
         const document = await vscode.workspace.openTextDocument(filePath);
         const text = document.getText();
         const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
 
+        // Apply transformation and generate updated code
         const fixedCode = fixCircuitBreakerIssues(ast, filePath);
 
         if (fixedCode.length === 0) {
@@ -33,6 +50,7 @@ export async function applyFixCircuitBreakerIssue(issue: string) {
             return;
         }
 
+        // Replace the entire file content with the new code
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
         edit.replace(document.uri, fullRange, fixedCode);
@@ -44,6 +62,13 @@ export async function applyFixCircuitBreakerIssue(issue: string) {
     }
 }
 
+/**
+ * Applies circuit breaker transformation logic to axios/fetch calls using AST traversal and modification.
+ * 
+ * @param ast - The parsed Abstract Syntax Tree of the file
+ * @param file - The file path (used only for reporting/logging)
+ * @returns string - Transformed JavaScript code (or empty string if no changes were needed)
+ */
 function fixCircuitBreakerIssues(ast: any, file: string): string {
     let breakerCount = 1;
     let hasCircuitBreakerImport = false;
@@ -53,7 +78,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
     const breakerDeclarations: estree.Statement[] = [];
     const breakerFnDeclarations: estree.Statement[] = [];
 
-    // Step 1: Check if opossum is already imported
+    // Step 1: Check if 'opossum' is already imported
     walkAncestor(ast, {
         ImportDeclaration(node: any) {
             if (node.source.value === "opossum") {
@@ -62,10 +87,10 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
         }
     });
 
-    // Step 2: Walk through CallExpressions
+    // Step 2: Look for axios/fetch API calls to wrap
     walkAncestor(ast, {
         CallExpression(node: any, ancestors: any[]) {
-            // ❌ Skip if already breaker.fire()
+            // Skip calls already wrapped with breaker.fire()
             if (
                 node.callee?.type === "MemberExpression" &&
                 node.callee.property?.type === "Identifier" &&
@@ -77,7 +102,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
             let shouldWrap = false;
             let label = '';
 
-            // ✅ axios call
+            // Detect axios.<method>()
             if (
                 node.callee?.type === "MemberExpression" &&
                 node.callee.object?.name === "axios" &&
@@ -87,7 +112,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                 label = `axios.${node.callee.property.name}`;
             }
 
-            // ✅ fetch call
+            // Detect fetch()
             if (node.callee?.type === "Identifier" && node.callee.name === "fetch") {
                 shouldWrap = true;
                 label = "fetch";
@@ -95,9 +120,11 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
 
             if (!shouldWrap) return;
 
+            // Generate unique circuit breaker and function identifiers
             const breakerVar = `breaker${breakerCount++}`;
             const breakerFn = `${breakerVar}Fn`;
 
+            // Generate fire() call
             const fireCall = {
                 type: "AwaitExpression",
                 argument: {
@@ -111,7 +138,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                 }
             };
 
-            // Breaker function
+            // Create arrow function that wraps the original API call
             const apiFnDeclaration = {
                 type: "VariableDeclaration",
                 declarations: [
@@ -129,7 +156,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                 kind: "const"
             };
 
-            // Breaker instance
+            // Create breaker instance using opossum configuration
             const breakerDeclaration = {
                 type: "VariableDeclaration",
                 declarations: [
@@ -171,11 +198,11 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                 kind: "const"
             };
 
-            // Collect for ordered insertion
+            // Collect generated AST nodes for insertion
             breakerFnDeclarations.push(apiFnDeclaration as estree.VariableDeclaration);
             breakerDeclarations.push(breakerDeclaration as estree.VariableDeclaration);
 
-            // Replace API call with breaker.fire()
+            // Step 3: Replace the original API call with breaker.fire()
             const parent = ancestors[ancestors.length - 2];
             const grandParent = ancestors[ancestors.length - 3];
 
@@ -206,12 +233,11 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
         }
     });
 
-    // Step 3: Insert all breaker declarations in order
+    // Step 4: Insert circuit breaker declarations before non-import statements
     const firstNonImportIndex = ast.body.findIndex((stmt: any) => stmt.type !== "ImportDeclaration");
     ast.body.splice(firstNonImportIndex, 0, ...breakerFnDeclarations, ...breakerDeclarations);
 
-    // Step 4: Generate output
-    // Step 5: Generate final code
+    // Step 5: Generate final JavaScript code from the modified AST
     let generatedCode = "";
     try {
         generatedCode = escodegen.generate(ast);
@@ -220,7 +246,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
         return "";
     }
 
-    // ✅ Add require statement if not imported yet
+    // Step 6: Add require statement for opossum if it's not already present
     const hasRequireOpossum = generatedCode.includes("require('opossum')");
     const hasImportOpossum = generatedCode.includes("from 'opossum'");
 
@@ -229,11 +255,13 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
     }
 
     return codeModified ? generatedCode : "";
-
-    
 }
 
 
+/**
+ * Wrapper function for testing or external usage
+ * Applies circuit breaker fix logic to a given file.
+ */
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

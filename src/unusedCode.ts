@@ -2032,3 +2032,65 @@
 // export function deactivate() {
 //   console.log('❌ HealOps extension deactivated');
 // }
+
+//Secure Headers Issues
+// export function detectSecureHeadersIssues(ast: any, file: string): string[] {
+//     const issues: string[] = [];
+//     let foundHelmet = false;
+//     walkSimple(ast, {
+//         CallExpression(node) {
+//             if (node.callee.type === 'Identifier' && node.callee.name === 'helmet') {
+//                 foundHelmet = true;
+//             }
+//         }
+//     });
+//     if (!foundHelmet) {
+//         issues.push(`${file} - Secure headers middleware (helmet) is missing.`);
+//     }
+//     return issues;
+// }
+
+// fix logging
+// export function getFixedCodeLogging(originalCode: string): string {
+//     const ast = parseAst(originalCode);
+  
+//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+//       // TODO: Replace this condition with real logic for logging
+//       return false;
+//     });
+  
+//     return modifiedCode || originalCode;
+//   }
+
+// function fixLoggingIssues(fileContent: string): string {
+//     let modifiedCode = fileContent; // Store the original file content
+//     let changesMade = false; // Track whether any changes are made
+
+//     // Regular expression to detect try-catch blocks without console.error
+//     modifiedCode = modifiedCode.replace(
+//         /catch\s*\(([^)]+)\)\s*{([^}]*)}/g, // Match `catch(error) { /*code*/ }`
+//         (match, errorVar, body) => {
+//             if (!body.includes("console.error")) { // Check if logging is missing
+//                 changesMade = true;
+//                 return `catch (${errorVar}) { console.error('Error:', ${errorVar}); ${body} }`;
+//             }
+//             return match; // Return unchanged if logging already exists
+//         }
+//     );
+
+//     return changesMade ? modifiedCode : fileContent; // Return modified or original content
+// }
+
+//RateLimit
+
+// export function getFixedCodeRateLimiting(originalCode: string): string {
+//     const ast = parseAst(originalCode);
+  
+//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+//       // TODO: Replace this condition with real logic for rateLimiting
+//       return false;
+//     });
+  
+//     return modifiedCode || originalCode;
+//   }
+  

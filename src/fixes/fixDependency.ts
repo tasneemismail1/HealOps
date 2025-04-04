@@ -1,54 +1,56 @@
+// VS Code API modules to manipulate workspace and documents
 import * as vscode from 'vscode';
 import * as path from 'path';
+
+// Acorn for JavaScript parsing into AST
 import * as acorn from 'acorn';
 import { ancestor as walkAncestor } from "acorn-walk";
+
+// Code generator to convert modified AST back to code
 import * as escodegen from "escodegen";
+
+// Utilities for parsing AST with comment support
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-
+/**
+ * Applies a fix to replace hardcoded dependency instantiation (`new ClassName()`)
+ * with proper constructor or function parameter injection.
+ * 
+ * This fix promotes clean architecture and makes the code more testable and modular.
+ */
 export async function applyFixDependencyIssue(issue: string) {
-    // Log the issue being processed
-    console.log(issue);
+    console.log(issue); // Log issue details for debugging
 
-    // Extract the filename from the issue report (everything before " - ")
+    // Extract the file name from the issue description
     const file = issue.split(" - ")[0].trim();
-    console.log("File:", file);
-
     const fileName = path.basename(file);
-    console.log("File name:", fileName);
 
-    // Ensure a workspace is open
+    // Ensure VS Code workspace is open
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        return null;
-    }
+    if (!workspaceFolders) return null;
 
-    // Get the workspace directory
+    // Build full file path to access and modify it
     const directory = workspaceFolders[0].uri.fsPath;
-    console.log("Directory:", directory);
-
-    // Construct the full file path
     const filePath = path.join(directory, fileName);
-    console.log("File path:", filePath);
 
     try {
-        // Open and read the file content
+        // Load the file contents
         const document = await vscode.workspace.openTextDocument(filePath);
         const text = document.getText();
 
-        // Parse the file content into an AST (Abstract Syntax Tree) using Acorn
+        // Parse into AST for structural modification
         const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
 
-        // Apply the dependency injection fix
+        // Apply the dependency injection transformation
         const fixedCode = fixDependencyIssues(ast, filePath);
 
-        // If no modifications were made, inform the user
+        // If no code was changed, show a notice
         if (fixedCode.length === 0) {
             vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
             return;
         }
 
-        // Apply the fixed code to the document in VSCode
+        // Replace original code with the modified version
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
         edit.replace(document.uri, fullRange, fixedCode);
@@ -56,12 +58,16 @@ export async function applyFixDependencyIssue(issue: string) {
         await vscode.workspace.applyEdit(edit);
         vscode.window.showInformationMessage(`✅ Dependency injection applied in ${filePath}.`);
     } catch (error) {
-        // Handle any errors that occur during the process
         vscode.window.showErrorMessage(`❌ Error fixing Dependency injection issue: ${error}`);
     }
 }
 
-
+/**
+ * Transforms hardcoded `new ClassName()` dependencies into constructor or function parameters
+ * to follow the dependency injection principle.
+ * 
+ * Supports both class and function scopes.
+ */
 function fixDependencyIssues(ast: any, file: string): string {
     let codeModified = false;
 
@@ -71,47 +77,49 @@ function fixDependencyIssues(ast: any, file: string): string {
                 const className = node.callee.name;
                 const paramName = `inject${className}`;
 
-                // Find the parent function/class where the `new` is used
-                const parentClassNode = ancestors.find(ancestor => ancestor.type === 'ClassDeclaration');
-                const parentFunctionNode = ancestors.find(ancestor => 
-                    ancestor.type === 'FunctionDeclaration' || ancestor.type === 'FunctionExpression' ||  ancestor.type === 'ArrowFunctionExpression');
+                // Detect enclosing class declaration
+                const parentClassNode = ancestors.find(a => a.type === 'ClassDeclaration');
+
+                // Detect enclosing function
+                const parentFunctionNode = ancestors.find(a =>
+                    a.type === 'FunctionDeclaration' ||
+                    a.type === 'FunctionExpression' ||
+                    a.type === 'ArrowFunctionExpression'
+                );
 
                 if (parentClassNode) {
-                     // Convert `this.db = new Database();` → Inject in constructor
-                    let constructorNode = parentClassNode.body.body.find((method: any) => method.kind === 'constructor');
+                    // Case 1: Class-scoped injection
+
+                    // Find or create the constructor
+                    let constructorNode = parentClassNode.body.body.find(
+                        (method: any) => method.kind === 'constructor'
+                    );
 
                     if (!constructorNode) {
-                        // Create a constructor if it doesn't exist
                         constructorNode = {
                             type: 'MethodDefinition',
                             kind: 'constructor',
                             key: { type: 'Identifier', name: 'constructor' },
-                            value: { type: 'FunctionExpression', params: [], body: { type: 'BlockStatement', body: [] } },
+                            value: {
+                                type: 'FunctionExpression',
+                                params: [],
+                                body: { type: 'BlockStatement', body: [] }
+                            },
                         };
                         parentClassNode.body.body.unshift(constructorNode);
                     }
 
-                    // Ensure the constructor has a `params` array
-                    if (!constructorNode.value.params) {
-                        constructorNode.value.params = [];
-                    }
-
-                    // Ensure constructor takes the dependency as a parameter
-                    if (!constructorNode.value.params.some((param: any) => param.type === 'Identifier' && param.name === paramName)) {
+                    // Inject dependency as constructor parameter if missing
+                    if (!constructorNode.value.params.some((p: any) => p.name === paramName)) {
                         constructorNode.value.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
-                     // Replace `new ClassName()` with the injected parameter
-                    const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
+                    // Replace `new ClassName()` with injected parameter
+                    const assignmentNode = ancestors.find(a => a.type === 'AssignmentExpression');
                     const originalCode = escodegen.generate(node);
-
                     if (assignmentNode && assignmentNode.right === node) {
                         assignmentNode.right = { type: 'Identifier', name: paramName };
-
-                        // Insert a comment above the assignment with the original line
-                        if (!assignmentNode.leadingComments) {
-                            assignmentNode.leadingComments = [];
-                        }
+                        assignmentNode.leadingComments ??= [];
                         assignmentNode.leadingComments.push({
                             type: 'Line',
                             value: ` original: ${originalCode}`
@@ -119,26 +127,21 @@ function fixDependencyIssues(ast: any, file: string): string {
                     }
 
                     codeModified = true;
-                } else if (parentFunctionNode) {
-                     // Handle function-level injection
-                    if (!Array.isArray(parentFunctionNode.params)) {
-                        parentFunctionNode.params = [];
-                    }
 
-                    if (!parentFunctionNode.params.some((param: any) => param.type === 'Identifier' && param.name === paramName)) {
+                } else if (parentFunctionNode) {
+                    // Case 2: Function-level injection
+
+                    // Inject as function parameter if missing
+                    if (!parentFunctionNode.params.some((p: any) => p.name === paramName)) {
                         parentFunctionNode.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
-                    // Replace `new ClassName()` with the injected parameter
-                    const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
+                    // Replace `new ClassName()` with injected parameter
+                    const assignmentNode = ancestors.find(a => a.type === 'AssignmentExpression');
                     const originalCode = escodegen.generate(node);
-
                     if (assignmentNode && assignmentNode.right === node) {
                         assignmentNode.right = { type: 'Identifier', name: paramName };
-
-                        if (!assignmentNode.leadingComments) {
-                            assignmentNode.leadingComments = [];
-                        }
+                        assignmentNode.leadingComments ??= [];
                         assignmentNode.leadingComments.push({
                             type: 'Line',
                             value: ` original: ${originalCode}`
@@ -151,15 +154,18 @@ function fixDependencyIssues(ast: any, file: string): string {
         },
     });
 
+    // Generate updated code if modifications were made
     return codeModified ? escodegen.generate(ast, { comment: true }) : "";
 }
 
-
+/**
+ * Wrapper function to apply dependency injection fix from any file path.
+ * Useful for testing or command-based use.
+ */
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();
 
-    // Modify this call to reuse your existing fix logic
     const fixedCode = fixDependencyIssues
         ? fixDependencyIssues(parseAst(text), filePath)
         : text;

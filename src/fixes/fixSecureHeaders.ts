@@ -1,35 +1,32 @@
+// Required imports for file manipulation and project navigation
 import * as vscode from 'vscode';
 import * as path from 'path';
+
+// Utility to collect all JavaScript and TypeScript files
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-// export function getFixedCodeSecureHeaders(originalCode: string): string {
-//     const ast = parseAst(originalCode);
-  
-//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-//       // TODO: Replace this condition with real logic for secureHeaders
-//       return false;
-//     });
-  
-//     return modifiedCode || originalCode;
-//   }
-  
-
+/**
+ * Fixes missing secure headers in Express apps by injecting helmet middleware.
+ * Adds both the required `require('helmet')` statement and `app.use(helmet())` call.
+ * 
+ * @param issue - The issue string (e.g., "server.js - Secure headers middleware is missing.")
+ */
 export async function applyFixSecureHeadersIssue(issue: string) {
     console.log("Fixing secure headers issue for:", issue);
 
-    // Extract the filename from the issue report
+    // Extract the filename from the issue text
     const file = issue.split(" - ")[0].trim();
     console.log("Extracted File Name:", file);
 
-    // Ensure a workspace is open
+    // Check if a workspace is open
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         vscode.window.showErrorMessage("No workspace found.");
         return;
     }
 
-    // Get the workspace directory and find the correct file
+    // Locate the target file from all JS/TS files
     const projectRoot = workspaceFolders[0].uri.fsPath;
     const allFiles = getAllJsTsFiles(projectRoot);
     const filePath = allFiles.find(filePath => path.basename(filePath) === file);
@@ -40,20 +37,19 @@ export async function applyFixSecureHeadersIssue(issue: string) {
     }
 
     try {
-        // Open and read the file
+        // Load file content and apply fix
         const document = await vscode.workspace.openTextDocument(filePath);
         let text = document.getText();
 
-        // Apply the secure headers fix
         const fixedCode = fixSecureHeadersIssues(text);
 
-        // If no modifications were made, inform the user
+        // Skip if no changes were needed
         if (fixedCode === text) {
             vscode.window.showInformationMessage(`✅ No changes needed in ${filePath}.`);
             return;
         }
 
-        // Apply the fixed code to the document in VSCode
+        // Apply the edited content
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
         edit.replace(document.uri, fullRange, fixedCode);
@@ -65,43 +61,32 @@ export async function applyFixSecureHeadersIssue(issue: string) {
     }
 }
 
-
-// function fixSecureHeadersIssues(fileContent: string): string {
-//     let modified = false;
-
-//     // Check if `helmet()` is already being used
-//     if (!fileContent.includes("helmet()")) {
-//         console.log("Adding secure headers middleware (helmet)...");
-
-//         // Insert the helmet import
-//         if (!fileContent.includes("const helmet = require('helmet');")) {
-//             fileContent = "const helmet = require('helmet');\n" + fileContent;
-//         }
-
-//         // Add `app.use(helmet())` after `express()` initialization
-//         fileContent = fileContent.replace(/const app = express\(\);/, match => match + "\napp.use(helmet());");
-
-//         modified = true;
-//     }
-
-//     return modified ? fileContent : fileContent;
-// }
-
+/**
+ * Injects the helmet middleware into the Express app if it's not already included.
+ * 
+ * - Adds: `const helmet = require('helmet');` at the top.
+ * - Adds: `app.use(helmet());` immediately after the app is created.
+ * 
+ * Handles variable app name (e.g., `const app = express();` or `const server = express();`)
+ *
+ * @param fileContent - The source code to be modified
+ * @returns string - Modified source code (or original if no change needed)
+ */
 function fixSecureHeadersIssues(fileContent: string): string {
     let modified = false;
 
-    // Ensure `helmet` is imported at the top
+    // Step 1: Ensure helmet is imported
     if (!/const helmet = require\(['"]helmet['"]\);/.test(fileContent)) {
         fileContent = `const helmet = require('helmet');\n` + fileContent;
         modified = true;
     }
 
-    // Match express app initialization and insert helmet middleware
-    const appInitRegex = /const (\w+) = express\(\);/;
+    // Step 2: Add middleware right after app initialization
+    const appInitRegex = /const (\w+) = express\(\);/; // Detect variable name (e.g., app, server)
     const match = fileContent.match(appInitRegex);
 
     if (match) {
-        const appVariable = match[1]; // Capture variable name (e.g., `app` or `server`)
+        const appVariable = match[1]; // Example: `app`
         const middlewareRegex = new RegExp(`${appVariable}\\.use\\(helmet\\(\\)\\);`);
 
         if (!middlewareRegex.test(fileContent)) {
@@ -113,12 +98,16 @@ function fixSecureHeadersIssues(fileContent: string): string {
     return modified ? fileContent : fileContent;
 }
 
-
+/**
+ * Dispatcher-compatible method for invoking the secure headers fix.
+ * 
+ * @param filePath - Full path to the file
+ * @returns Updated file content
+ */
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();
 
-    // Modify this call to reuse your existing fix logic
     const fixedCode = fixSecureHeadersIssues
         ? fixSecureHeadersIssues(text)
         : text;

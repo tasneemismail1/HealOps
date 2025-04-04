@@ -1,98 +1,101 @@
+// VS Code API modules for reading and editing workspace files
 import * as vscode from 'vscode';
 import * as path from 'path';
+
+// AST libraries for code parsing and generation
 import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import * as escodegen from "escodegen";
+
+// Local utilities for parsing and modifying AST
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
-  
 
+/**
+ * Main function to fix timeout issues in Axios requests.
+ * Parses the file, injects timeout where missing, and rewrites it in VS Code.
+ *
+ * @param issue - A string formatted as "<filename> - <description>"
+ */
 export async function applyFixTimeoutIssue(issue: string) {
-    // Log the issue being processed
-    console.log(issue);
+    console.log(issue); // Log raw issue for debugging
 
-    // Extract the filename from the issue report (everything before " - ")
-    const file = issue.split(" - ")[0].trim();
-    console.log("File:", file);
-
+    const file = issue.split(" - ")[0].trim(); // Extract filename
     const fileName = path.basename(file);
-    console.log("File name:", fileName);
 
-    // Ensure a workspace is open
+    // Ensure a workspace is open before proceeding
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        return null;
-    }
+    if (!workspaceFolders) return null;
 
-    // Get the workspace directory
     const directory = workspaceFolders[0].uri.fsPath;
-    console.log("Directory:", directory);
-
-    // Construct the full file path
     const filePath = path.join(directory, fileName);
-    console.log("File path:", filePath);
 
     try {
-        // Open and read the file content
+        // Open and read the file
         const document = await vscode.workspace.openTextDocument(filePath);
         const text = document.getText();
 
-        // Parse the file content into an AST (Abstract Syntax Tree) using Acorn
+        // Convert the code to an AST
         const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
 
-        // Apply the timeout fix
+        // Modify the AST if timeout is missing
         const fixedCode = fixTimeoutIssues(ast, filePath);
 
-        // If no modifications were made, inform the user
         if (fixedCode.length === 0) {
             vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
             return;
         }
 
-        // Apply the fixed code to the document in VSCode
+        // Apply and save the updated content in VS Code
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(text.length));
         edit.replace(document.uri, fullRange, fixedCode);
-
         await vscode.workspace.applyEdit(edit);
+
         vscode.window.showInformationMessage(`✅ Timeout issue fixed in ${filePath}.`);
     } catch (error) {
-        // Handle any errors that occur during the process
         vscode.window.showErrorMessage(`❌ Error fixing timeout issue: ${error}`);
     }
 }
 
-
+/**
+ * Detects and adds `timeout` to Axios request configurations if missing.
+ *
+ * @param ast - Parsed Abstract Syntax Tree of the file
+ * @param file - File name (used for debugging/logs only)
+ * @returns Updated source code string, or empty if no changes were needed
+ */
 function fixTimeoutIssues(ast: any, file: string): string {
-    let codeModified = false; // Track if any modifications were made
+    let codeModified = false;
 
-    // Traverse the AST to detect Axios calls
+    // Walk through AST nodes to find Axios calls
     walkSimple(ast, {
         CallExpression(node) {
-            // Check if the function call is an Axios request
-            if (node.callee.type === "MemberExpression" &&
+            if (
+                node.callee.type === "MemberExpression" &&
                 node.callee.object.type === "Identifier" &&
-                node.callee.object.name === "axios") {
-
+                node.callee.object.name === "axios"
+            ) {
                 let hasTimeout = false;
                 let configObject = null;
 
-                // If Axios request has more than one argument, check the second argument (config object)
+                // Check if second argument is a config object
                 if (node.arguments.length > 1) {
                     configObject = node.arguments[1];
 
-                    // Check if the config object contains a "timeout" property
-                    if (configObject.type === "ObjectExpression" &&
-                        configObject.properties.some((prop) =>
-                            prop.type === "Property" &&
-                            prop.key.type === "Identifier" &&
-                            prop.key.name === "timeout")) {
+                    if (
+                        configObject.type === "ObjectExpression" &&
+                        configObject.properties.some(
+                            (prop) =>
+                                prop.type === "Property" &&
+                                prop.key.type === "Identifier" &&
+                                prop.key.name === "timeout"
+                        )
+                    ) {
                         hasTimeout = true;
                     }
                 }
 
-                // If timeout is missing, add it to the request configuration
                 if (!hasTimeout) {
-                    // Infer `start` and `end` values from existing nodes to maintain structure
                     const start = node.start ?? 0;
                     const end = node.end ?? 0;
 
@@ -130,23 +133,28 @@ function fixTimeoutIssues(ast: any, file: string): string {
                             end,
                         });
                     }
-                    codeModified = true; // Mark modification as true
+
+                    codeModified = true;
                 }
             }
         },
     });
 
-    // If modifications were made, return the updated code; otherwise, return an empty string
     return codeModified ? escodegen.generate(ast) : "";
 }
 
+/**
+ * Dispatcher-compatible entry point to apply timeout fix logic from a file path.
+ *
+ * @param filePath - Full path to the source file
+ * @returns Fixed source code string
+ */
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();
 
-    // Modify this call to reuse your existing fix logic
     const fixedCode = fixTimeoutIssues
-        ? fixTimeoutIssues(parseAst(text),filePath)
+        ? fixTimeoutIssues(parseAst(text), filePath)
         : text;
 
     return fixedCode || text;
