@@ -66,26 +66,53 @@ export async function applyFixSecureHeadersIssue(issue: string) {
 }
 
 
+// function fixSecureHeadersIssues(fileContent: string): string {
+//     let modified = false;
+
+//     // Check if `helmet()` is already being used
+//     if (!fileContent.includes("helmet()")) {
+//         console.log("Adding secure headers middleware (helmet)...");
+
+//         // Insert the helmet import
+//         if (!fileContent.includes("const helmet = require('helmet');")) {
+//             fileContent = "const helmet = require('helmet');\n" + fileContent;
+//         }
+
+//         // Add `app.use(helmet())` after `express()` initialization
+//         fileContent = fileContent.replace(/const app = express\(\);/, match => match + "\napp.use(helmet());");
+
+//         modified = true;
+//     }
+
+//     return modified ? fileContent : fileContent;
+// }
+
 function fixSecureHeadersIssues(fileContent: string): string {
     let modified = false;
 
-    // Check if `helmet()` is already being used
-    if (!fileContent.includes("helmet()")) {
-        console.log("Adding secure headers middleware (helmet)...");
-
-        // Insert the helmet import
-        if (!fileContent.includes("const helmet = require('helmet');")) {
-            fileContent = "const helmet = require('helmet');\n" + fileContent;
-        }
-
-        // Add `app.use(helmet())` after `express()` initialization
-        fileContent = fileContent.replace(/const app = express\(\);/, match => match + "\napp.use(helmet());");
-
+    // Ensure `helmet` is imported at the top
+    if (!/const helmet = require\(['"]helmet['"]\);/.test(fileContent)) {
+        fileContent = `const helmet = require('helmet');\n` + fileContent;
         modified = true;
+    }
+
+    // Match express app initialization and insert helmet middleware
+    const appInitRegex = /const (\w+) = express\(\);/;
+    const match = fileContent.match(appInitRegex);
+
+    if (match) {
+        const appVariable = match[1]; // Capture variable name (e.g., `app` or `server`)
+        const middlewareRegex = new RegExp(`${appVariable}\\.use\\(helmet\\(\\)\\);`);
+
+        if (!middlewareRegex.test(fileContent)) {
+            fileContent = fileContent.replace(appInitRegex, match => match + `\n${appVariable}.use(helmet());`);
+            modified = true;
+        }
     }
 
     return modified ? fileContent : fileContent;
 }
+
 
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
