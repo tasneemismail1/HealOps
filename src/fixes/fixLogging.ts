@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { simple as walkSimple } from 'acorn-walk';
+import * as acorn from 'acorn';
+import * as escodegen from 'escodegen';
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
@@ -66,24 +69,69 @@ export async function applyFixLoggingIssue(issue: string) {
     }
 }
 
-function fixLoggingIssues(fileContent: string): string {
-    let modifiedCode = fileContent; // Store the original file content
-    let changesMade = false; // Track whether any changes are made
+export function fixLoggingIssues(fileContent: string): string {
+    const ast = acorn.parse(fileContent, { ecmaVersion: 'latest', sourceType: 'module' });
+    let codeModified = false;
 
-    // Regular expression to detect try-catch blocks without console.error
-    modifiedCode = modifiedCode.replace(
-        /catch\s*\(([^)]+)\)\s*{([^}]*)}/g, // Match `catch(error) { /*code*/ }`
-        (match, errorVar, body) => {
-            if (!body.includes("console.error")) { // Check if logging is missing
-                changesMade = true;
-                return `catch (${errorVar}) { console.error('Error:', ${errorVar}); ${body} }`;
+    walkSimple(ast, {
+        TryStatement(node: any) {
+            const catchBlock = node.handler;
+            if (catchBlock && catchBlock.body && catchBlock.body.body) {
+                const hasLogging = catchBlock.body.body.some((stmt: any) =>
+                    stmt.type === 'ExpressionStatement' &&
+                    stmt.expression.type === 'CallExpression' &&
+                    stmt.expression.callee.type === 'MemberExpression' &&
+                    stmt.expression.callee.object.name === 'console'
+                );
+
+                if (!hasLogging) {
+                    const errVar = catchBlock.param?.name || 'error';
+
+                    // Add console.error('Error:', error); at the beginning of catch block
+                    catchBlock.body.body.unshift({
+                        type: 'ExpressionStatement',
+                        expression: {
+                            type: 'CallExpression',
+                            callee: {
+                                type: 'MemberExpression',
+                                object: { type: 'Identifier', name: 'console' },
+                                property: { type: 'Identifier', name: 'error' },
+                                computed: false,
+                            },
+                            arguments: [
+                                { type: 'Literal', value: 'Error:' },
+                                { type: 'Identifier', name: errVar }
+                            ]
+                        }
+                    });
+
+                    codeModified = true;
+                }
             }
-            return match; // Return unchanged if logging already exists
         }
-    );
+    });
 
-    return changesMade ? modifiedCode : fileContent; // Return modified or original content
+    return codeModified ? escodegen.generate(ast, { comment: true}) : fileContent;
 }
+
+// function fixLoggingIssues(fileContent: string): string {
+//     let modifiedCode = fileContent; // Store the original file content
+//     let changesMade = false; // Track whether any changes are made
+
+//     // Regular expression to detect try-catch blocks without console.error
+//     modifiedCode = modifiedCode.replace(
+//         /catch\s*\(([^)]+)\)\s*{([^}]*)}/g, // Match `catch(error) { /*code*/ }`
+//         (match, errorVar, body) => {
+//             if (!body.includes("console.error")) { // Check if logging is missing
+//                 changesMade = true;
+//                 return `catch (${errorVar}) { console.error('Error:', ${errorVar}); ${body} }`;
+//             }
+//             return match; // Return unchanged if logging already exists
+//         }
+//     );
+
+//     return changesMade ? modifiedCode : fileContent; // Return modified or original content
+// }
 
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
