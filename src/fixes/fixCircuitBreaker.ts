@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as acorn from 'acorn';
-import { simple as walkSimple } from 'acorn-walk';
 import { ancestor as walkAncestor } from "acorn-walk";
 import * as escodegen from "escodegen";
 import * as estree from 'estree';

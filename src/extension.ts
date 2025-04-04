@@ -317,7 +317,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function detectIssueType(issueText: string): string | null {
-    const lower = issueText.toLowerCase();
+    const lower = issueText.toLowerCase().replace(/[-_]/g, ' '); // normalize hyphens & underscores
+
     if (lower.includes('retry')) return 'retry';
     if (lower.includes('circuit breaker')) return 'circuitBreaker';
     if (lower.includes('health check')) return 'healthCheck';
@@ -327,8 +328,10 @@ function detectIssueType(issueText: string): string | null {
     if (lower.includes('rate limit')) return 'rateLimiting';
     if (lower.includes('secure header')) return 'secureHeaders';
     if (lower.includes('input validation')) return 'inputValidation';
+
     return null;
 }
+
 
 export function deactivate() {
     console.log('❌ HealOps extension deactivated');
