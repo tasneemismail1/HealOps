@@ -5,16 +5,16 @@ import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
 
-export function getFixedCodeRateLimiting(originalCode: string): string {
-    const ast = parseAst(originalCode);
+// export function getFixedCodeRateLimiting(originalCode: string): string {
+//     const ast = parseAst(originalCode);
   
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for rateLimiting
-      return false;
-    });
+//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+//       // TODO: Replace this condition with real logic for rateLimiting
+//       return false;
+//     });
   
-    return modifiedCode || originalCode;
-  }
+//     return modifiedCode || originalCode;
+//   }
   
 export async function applyFixRateLimitingIssue(issue: string) {
     // Ensure that a workspace is open

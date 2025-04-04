@@ -3,16 +3,16 @@ import * as path from 'path';
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-export function getFixedCodeHealthCheck(originalCode: string): string {
-    const ast = parseAst(originalCode);
+// export function getFixedCodeHealthCheck(originalCode: string): string {
+//     const ast = parseAst(originalCode);
   
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for healthCheck
-      return false;
-    });
+//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+//       // TODO: Replace this condition with real logic for healthCheck
+//       return false;
+//     });
   
-    return modifiedCode || originalCode;
-  }
+//     return modifiedCode || originalCode;
+//   }
   
 
 export async function applyFixHealthCheckIssue(issue: string) {
@@ -75,10 +75,10 @@ function fixHealthCheckIssues(fileContent: string): string {
 
         // Insert the health check route
         const healthCheckCode = `
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
-});
-`;
+        app.get('/health', (req, res) => {
+            res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+        });
+        `;
         // Add the route before `app.listen`
         fileContent = fileContent.replace(/app.listen\(\d+.*,/, match => healthCheckCode + "\n" + match);
 

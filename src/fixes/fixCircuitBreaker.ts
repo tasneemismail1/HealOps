@@ -173,9 +173,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
 
             // Collect for ordered insertion
             breakerFnDeclarations.push(apiFnDeclaration as estree.VariableDeclaration);
-breakerDeclarations.push(breakerDeclaration as estree.VariableDeclaration);
-
-            
+            breakerDeclarations.push(breakerDeclaration as estree.VariableDeclaration);
 
             // Replace API call with breaker.fire()
             const parent = ancestors[ancestors.length - 2];
@@ -214,44 +212,27 @@ breakerDeclarations.push(breakerDeclaration as estree.VariableDeclaration);
 
     // Step 4: Generate output
     // Step 5: Generate final code
-let generatedCode = "";
-try {
-    generatedCode = escodegen.generate(ast);
-} catch (err) {
-    console.error("❌ Code generation error:", err);
-    return "";
-}
+    let generatedCode = "";
+    try {
+        generatedCode = escodegen.generate(ast);
+    } catch (err) {
+        console.error("❌ Code generation error:", err);
+        return "";
+    }
 
-// ✅ Add require statement if not imported yet
-const hasRequireOpossum = generatedCode.includes("require('opossum')");
-const hasImportOpossum = generatedCode.includes("from 'opossum'");
+    // ✅ Add require statement if not imported yet
+    const hasRequireOpossum = generatedCode.includes("require('opossum')");
+    const hasImportOpossum = generatedCode.includes("from 'opossum'");
 
-if (!hasCircuitBreakerImport && !hasRequireOpossum && !hasImportOpossum) {
-    generatedCode = `const CircuitBreaker = require('opossum');\n\n${generatedCode}`;
-}
+    if (!hasCircuitBreakerImport && !hasRequireOpossum && !hasImportOpossum) {
+        generatedCode = `const CircuitBreaker = require('opossum');\n\n${generatedCode}`;
+    }
 
-return codeModified ? generatedCode : "";
+    return codeModified ? generatedCode : "";
 
     
 }
 
-
-
-
-
-
-
-
-
-export function getFixedCodeCircuitBreaker(originalCode: string): string {
-    const ast = parseAst(originalCode);
-
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-        return false;
-    });
-
-    return modifiedCode || originalCode;
-}
 
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);

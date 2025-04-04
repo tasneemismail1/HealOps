@@ -4,17 +4,6 @@ import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import * as escodegen from "escodegen";
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
-
-export function getFixedCodeTimeout(originalCode: string): string {
-    const ast = parseAst(originalCode);
-  
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for timeout
-      return false;
-    });
-  
-    return modifiedCode || originalCode;
-}
   
 
 export async function applyFixTimeoutIssue(issue: string) {
@@ -148,7 +137,7 @@ function fixTimeoutIssues(ast: any, file: string): string {
     });
 
     // If modifications were made, return the updated code; otherwise, return an empty string
-    return codeModified ? escodegen.generate(ast, { format: { indent: { style: "  " } } }) : "";
+    return codeModified ? escodegen.generate(ast) : "";
 }
 
 export async function applyFix(filePath: string): Promise<string> {

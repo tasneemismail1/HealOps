@@ -4,16 +4,16 @@ import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
 
-export function getFixedCodeLogging(originalCode: string): string {
-    const ast = parseAst(originalCode);
+// export function getFixedCodeLogging(originalCode: string): string {
+//     const ast = parseAst(originalCode);
   
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for logging
-      return false;
-    });
+//     const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
+//       // TODO: Replace this condition with real logic for logging
+//       return false;
+//     });
   
-    return modifiedCode || originalCode;
-  }
+//     return modifiedCode || originalCode;
+//   }
   
 
 export async function applyFixLoggingIssue(issue: string) {

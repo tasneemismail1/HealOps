@@ -6,18 +6,6 @@ import * as escodegen from "escodegen";
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
 
-export function getFixedCodeDependency(originalCode: string): string {
-    const ast = parseAst(originalCode);
-  
-    const modifiedCode = modifyAstAndGenerateCode(ast, (node: any) => {
-      // TODO: Replace this condition with real logic for dependency
-      return false;
-    });
-  
-    return modifiedCode || originalCode;
-  }
-  
-
 export async function applyFixDependencyIssue(issue: string) {
     // Log the issue being processed
     console.log(issue);
@@ -83,16 +71,17 @@ function fixDependencyIssues(ast: any, file: string): string {
                 const className = node.callee.name;
                 const paramName = `inject${className}`;
 
+                // Find the parent function/class where the `new` is used
                 const parentClassNode = ancestors.find(ancestor => ancestor.type === 'ClassDeclaration');
                 const parentFunctionNode = ancestors.find(ancestor => 
-                    ancestor.type === 'FunctionDeclaration' || 
-                    ancestor.type === 'FunctionExpression' || 
-                    ancestor.type === 'ArrowFunctionExpression');
+                    ancestor.type === 'FunctionDeclaration' || ancestor.type === 'FunctionExpression' ||  ancestor.type === 'ArrowFunctionExpression');
 
                 if (parentClassNode) {
+                     // Convert `this.db = new Database();` → Inject in constructor
                     let constructorNode = parentClassNode.body.body.find((method: any) => method.kind === 'constructor');
 
                     if (!constructorNode) {
+                        // Create a constructor if it doesn't exist
                         constructorNode = {
                             type: 'MethodDefinition',
                             kind: 'constructor',
@@ -102,14 +91,17 @@ function fixDependencyIssues(ast: any, file: string): string {
                         parentClassNode.body.body.unshift(constructorNode);
                     }
 
+                    // Ensure the constructor has a `params` array
                     if (!constructorNode.value.params) {
                         constructorNode.value.params = [];
                     }
 
+                    // Ensure constructor takes the dependency as a parameter
                     if (!constructorNode.value.params.some((param: any) => param.type === 'Identifier' && param.name === paramName)) {
                         constructorNode.value.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
+                     // Replace `new ClassName()` with the injected parameter
                     const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
                     const originalCode = escodegen.generate(node);
 
@@ -128,6 +120,7 @@ function fixDependencyIssues(ast: any, file: string): string {
 
                     codeModified = true;
                 } else if (parentFunctionNode) {
+                     // Handle function-level injection
                     if (!Array.isArray(parentFunctionNode.params)) {
                         parentFunctionNode.params = [];
                     }
@@ -136,6 +129,7 @@ function fixDependencyIssues(ast: any, file: string): string {
                         parentFunctionNode.params.unshift({ type: 'Identifier', name: paramName });
                     }
 
+                    // Replace `new ClassName()` with the injected parameter
                     const assignmentNode = ancestors.find(ancestor => ancestor.type === 'AssignmentExpression');
                     const originalCode = escodegen.generate(node);
 
