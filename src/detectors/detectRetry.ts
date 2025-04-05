@@ -1,86 +1,92 @@
-// Import estraverse for a more flexible AST traversal that includes parent/child relationships
+// Import estraverse for AST traversal with parent tracking
 import * as estraverse from 'estraverse';
 
 /**
- * Detects API calls (like fetch or axios) that are not wrapped with retry mechanisms.
- * Retry logic is important for building resilient applications that handle temporary network failures.
- *
- * @param ast - The Abstract Syntax Tree of the parsed source code
- * @param file - File name, used for reporting and logging
- * @returns string[] - List of issues found in the file
+ * Detects fetch/axios API calls not wrapped with retry logic.
+ * 
+ * @param ast - Parsed AST
+ * @param file - File name for context in output
+ * @returns string[] - List of retry-related issues
  */
 export function detectRetryIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
 
-    // Traverse the AST with access to parent nodes for contextual checks
-    estraverse.traverse(ast as any, {
-        enter(node: any, parent: any) {
-            console.log(`Inspecting node of type: ${node.type} in file: ${file}`);
+    // Track parent references for upward context traversal
+    const parentMap = new WeakMap();
 
-            /**
-             * Step 1: Detect API calls like `fetch(...)` or `axios(...)`.
-             * These are common network request methods in JS/TS, especially in microservices and frontends.
-             */
+    // First pass: attach parent info
+    estraverse.traverse(ast, {
+        enter(node, parent) {
+            if (parent) {
+                parentMap.set(node, parent);
+            }
+        }
+    });
+
+    // Second pass: analyze and detect retry issues
+    estraverse.traverse(ast, {
+        enter(node) {
             if (
                 node.type === 'CallExpression' &&
-                node.callee.type === 'Identifier' &&
-                (node.callee.name === 'fetch' || node.callee.name === 'axios')
+                (
+                    (node.callee.type === 'Identifier' && node.callee.name === 'fetch') ||
+                    (node.callee.type === 'MemberExpression' &&
+                        node.callee.object?.type === 'Identifier' &&
+                        node.callee.object.name === 'axios' &&
+                        node.callee.property?.type === 'Identifier')
+                )
             ) {
                 let hasRetryLoop = false;
-                let hasTryCatch = false;
-                let identifierName = 'UnknownVariable'; // Default if not assigned to a variable
+                let identifierName = 'UnknownVariable';
+                let apiCall = 'unknown';
 
-                console.log(`Found API call (${node.callee.name}) in file: ${file}`);
+if (node.callee.type === 'Identifier') {
+    apiCall = node.callee.name; // e.g., fetch
+} else if (
+    node.callee.type === 'MemberExpression' &&
+    node.callee.object?.type === 'Identifier' &&
+    node.callee.object.name === 'axios' &&
+    node.callee.property?.type === 'Identifier'
+) {
+    apiCall = `axios.${node.callee.property.name}`; // e.g., axios.get
+}
 
-                // Step 2: If assigned to a variable, capture the variable name for better issue messages
-                if (parent && parent.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
-                    identifierName = parent.id.name;
-                    console.log(`API call result stored in variable: ${identifierName}`);
-                }
-
-                /**
-                 * Step 3: Check if the API call is inside a try-catch block,
-                 * which shows at least a basic error handling mechanism.
-                 */
-                let ancestor = parent;
-                while (ancestor) {
-                    if (ancestor.type === 'TryStatement') {
-                        hasTryCatch = true;
-                        console.log(`API call (${node.callee.name}) inside try-catch in file: ${file}`);
+                // Get variable name if it's assigned
+                let current = parentMap.get(node);
+                while (current) {
+                    if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier') {
+                        identifierName = current.id.name;
                         break;
                     }
-                    ancestor = ancestor.parent; // Use parent tracking to walk upward
+                    if (current.type === 'AssignmentExpression' && current.left.type === 'Identifier') {
+                        identifierName = current.left.name;
+                        break;
+                    }
+                    current = parentMap.get(current);
                 }
 
-                /**
-                 * Step 4: Check whether retry logic is implemented using loops.
-                 * Retry logic typically appears in `for`, `while`, or recursive patterns.
-                 */
-                estraverse.traverse(node, {
-                    enter(subNode: any) {
-                        if (subNode.type === 'WhileStatement' || subNode.type === 'ForStatement') {
-                            hasRetryLoop = true;
-                            console.log(`Found retry loop in file: ${file}`);
-                        }
+                // Climb up the parent chain to detect retry wrapper
+                current = parentMap.get(node);
+                while (current) {
+                    if (
+                        current.type === 'WhileStatement' &&
+                        current.test?.type === 'BinaryExpression' &&
+                        current.test.left?.name === 'retries'
+                    ) {
+                        hasRetryLoop = true;
+                        break;
                     }
-                });
+                    current = parentMap.get(current);
+                }
 
-                /**
-                 * Step 5: If retry logic is absent, flag this as a resilience issue.
-                 * These kinds of missed patterns can cause services to fail under unstable network conditions.
-                 */
                 if (!hasRetryLoop) {
-                    issues.push(
-                        `${file} - API call (${node.callee.name}) stored in "${identifierName}" is missing retry logic.`
-                    );
-                    console.log(
-                        `Missing retry logic detected in file: ${file} for variable "${identifierName}".`
-                    );
+                    const message = `${file} - API call (${apiCall}) stored in "${identifierName}" is missing retry logic.`;
+                    issues.push(message);
+                    console.log('🔍 Retry issue found:', message);
                 }
             }
         }
     });
 
-    console.log(`Issues detected: ${issues.length}`);
     return issues;
 }
