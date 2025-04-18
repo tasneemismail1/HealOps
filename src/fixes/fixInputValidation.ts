@@ -1,18 +1,12 @@
-// VS Code API for file operations and UI notifications
 import * as vscode from 'vscode';
-// Node.js modules for reading and writing files
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Utility functions to retrieve JS/TS files
 import { getAllJsTsFiles } from '../utils/fileUtils';
-// AST utility placeholders (not used directly here but included for consistency)
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Main entry point to apply fixes for missing input validation logic.
- * Injects express-validator usage in POST/PUT routes if it's missing.
- */
+//apply fixes for missing input validation logic.
+//Injects express-validator usage in POST/PUT routes if it's missing.
 export async function applyFixInputValidationIssue(issue: string) {
     console.log("Applying input validation fix for:", issue);
 
@@ -73,13 +67,9 @@ export async function applyFixInputValidationIssue(issue: string) {
     }
 }
 
-/**
- * Injects express-validator-based input validation into Express.js POST/PUT routes
- * if it's missing. Also ensures necessary middleware and import statements are present.
- * 
- * @param fileContent - The original content of the JS/TS file
- * @returns Modified content with validation logic injected
- */
+//Injects express-validator-based input validation into Express.js POST/PUT routes
+//if it's missing. Also ensures necessary middleware and import statements are present.
+
 function fixInputValidationIssues(fileContent: string): string {
     let modified = false;
 
@@ -98,10 +88,7 @@ function fixInputValidationIssues(fileContent: string): string {
         modified = true;
     }
 
-    /**
-     * Regex to match app.post(...) or app.put(...) route declarations.
-     * This helps us safely inject validation middleware into applicable routes.
-     */
+    //Regex to match app.post(...) or app.put(...) route declarations for inject validation middleware into applicable routes.
     const routeRegex = /(app\.(post|put)\(['"`]\/[^'"`]+['"`],\s*\[?)/g;
     fileContent = fileContent.replace(routeRegex, (match, prefix) => {
         if (!match.includes("[check(")) {
@@ -114,10 +101,6 @@ function fixInputValidationIssues(fileContent: string): string {
     return modified ? fileContent : fileContent;
 }
 
-/**
- * Generic applyFix wrapper used in dispatchers or automated runners.
- * Allows programmatic triggering of the input validation fix.
- */
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

@@ -1,23 +1,12 @@
-// Import simple walker from acorn-walk to traverse AST nodes easily
-import { simple as walkSimple } from 'acorn-walk';
+import { simple as walkSimple } from 'acorn-walk';//traverse AST nodes
 
-/**
- * Detects whether rate limiting middleware is used in an Express application.
- * Rate limiting is a crucial security and performance control, especially in public APIs,
- * to prevent abuse like brute-force attacks or DoS.
- * 
- * @param ast - Abstract Syntax Tree of the parsed JavaScript/TypeScript file
- * @param file - Name of the file being scanned (used for tagging issues)
- * @returns string[] - List of detected issues related to missing rate limiting
- */
+//Detects whether rate limiting middleware is used in an Express application 
+//to prevent abuse like brute-force attacks or DoS.
+
 export function detectRateLimitingIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
     let foundRateLimit = false;
 
-    /**
-     * Traverse the AST to find calls to `app.use(...)`,
-     * which is where Express middleware is registered.
-     */
     walkSimple(ast, {
         CallExpression(node) {
             // Look for app.use(...) calls
@@ -30,11 +19,7 @@ export function detectRateLimitingIssues(ast: any, file: string): string[] {
             ) {
                 const args = node.arguments;
 
-                /**
-                 * Look through all arguments passed to app.use(...)
-                 * We are specifically checking if the rateLimit middleware is used.
-                 * This typically appears as: `app.use(rateLimit({ ... }))`
-                 */
+                //Look through all arguments passed to app.use(...) appears as: `app.use(rateLimit({ ... }))`
                 if (
                     args.some(arg =>
                         arg.type === 'CallExpression' &&
@@ -49,7 +34,7 @@ export function detectRateLimitingIssues(ast: any, file: string): string[] {
         }
     });
 
-    // If no rate limiting was found, report it as a potential vulnerability
+    // If no rate limiting was found
     if (!foundRateLimit) {
         console.log(`❌ Scanner found missing rate limiting in: ${file}`);
         issues.push(`${file} - Rate limiting middleware is missing.`);

@@ -1,25 +1,18 @@
-// VS Code API modules to manipulate workspace and documents
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-// Acorn for JavaScript parsing into AST
-import * as acorn from 'acorn';
+import * as acorn from 'acorn'; // Acorn for Js/Ts  code parsing into AST
 import { ancestor as walkAncestor } from "acorn-walk";
 
-// Code generator to convert modified AST back to code
-import * as escodegen from "escodegen";
+import * as escodegen from "escodegen"; //convert modified AST back to code
 
-// Utilities for parsing AST with comment support
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Applies a fix to replace hardcoded dependency instantiation (`new ClassName()`)
- * with proper constructor or function parameter injection.
- * 
- * This fix promotes clean architecture and makes the code more testable and modular.
- */
+//Applies a fix to replace hardcoded dependency instantiation (`new ClassName()`) 
+//with proper constructor or function parameter injection.
+
 export async function applyFixDependencyIssue(issue: string) {
-    console.log(issue); // Log issue details for debugging
+    console.log(issue);
 
     // Extract the file name from the issue description
     const file = issue.split(" - ")[0].trim();
@@ -27,7 +20,7 @@ export async function applyFixDependencyIssue(issue: string) {
 
     // Ensure VS Code workspace is open
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) return null;
+    if (!workspaceFolders) {return null;}
 
     // Build full file path to access and modify it
     const directory = workspaceFolders[0].uri.fsPath;
@@ -41,10 +34,9 @@ export async function applyFixDependencyIssue(issue: string) {
         // Parse into AST for structural modification
         const ast = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'module' });
 
-        // Apply the dependency injection transformation
         const fixedCode = fixDependencyIssues(ast, filePath);
 
-        // If no code was changed, show a notice
+        // If no code was changed, show a messsage
         if (fixedCode.length === 0) {
             vscode.window.showInformationMessage(`No changes needed in ${filePath}.`);
             return;
@@ -62,12 +54,8 @@ export async function applyFixDependencyIssue(issue: string) {
     }
 }
 
-/**
- * Transforms hardcoded `new ClassName()` dependencies into constructor or function parameters
- * to follow the dependency injection principle.
- * 
- * Supports both class and function scopes.
- */
+//Transforms hardcoded `new ClassName()` dependencies into constructor or function parameters
+
 function fixDependencyIssues(ast: any, file: string): string {
     let codeModified = false;
 
@@ -154,14 +142,10 @@ function fixDependencyIssues(ast: any, file: string): string {
         },
     });
 
-    // Generate updated code if modifications were made
     return codeModified ? escodegen.generate(ast, { comment: true }) : "";
 }
 
-/**
- * Wrapper function to apply dependency injection fix from any file path.
- * Useful for testing or command-based use.
- */
+//apply dependency injection fix from any file path.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

@@ -6,11 +6,7 @@ import { ancestor as walkAncestor } from 'acorn-walk';
 import * as escodegen from 'escodegen';
 import { parseAst } from '../utils/astUtils';
 
-/**
- * Fixes missing retry logic in the specified file based on a reported issue.
- * 
- * @param issue - The string in the format "filePath - Issue description"
- */
+//Fixes missing retry logic in the specified file based on a reported issue.
 export async function applyFixRetryIssue(issue: string) {
     console.log("Fixing retry logic for:", issue);
 
@@ -49,19 +45,14 @@ export async function applyFixRetryIssue(issue: string) {
     }
 }
 
-/**
- * Walks the AST and wraps eligible API calls (fetch/axios) with retry logic.
- * 
- * @param ast - Parsed JavaScript AST
- * @param file - Filename for logging/debugging
- * @returns Updated code string if modified, else an empty string
- */
+//walks the AST and wraps eligible API calls (fetch/axios) with retry logic.
+
 function fixRetryIssues(ast: any, file: string): string {
     let codeModified = false;
 
     walkAncestor(ast, {
         CallExpression(node: any, ancestors: any[]) {
-            if (!isApiCall(node.callee)) return;
+            if (!isApiCall(node.callee)) {return;}
 
             // Find the block where this call resides
             const block = ancestors.find(a => a.type === 'BlockStatement');
@@ -83,9 +74,7 @@ function fixRetryIssues(ast: any, file: string): string {
     return codeModified ? escodegen.generate(ast) : "";
 }
 
-/**
- * Determines whether the given callee is a retry-worthy API call (fetch/axios).
- */
+//Determines whether the given callee is a retry-worthy API call (fetch/axios).
 function isApiCall(callee: any): boolean {
     const axiosMethods = ['get', 'post', 'put', 'delete', 'patch'];
     return (
@@ -96,10 +85,8 @@ function isApiCall(callee: any): boolean {
     );
 }
 
-/**
- * Inserts retry logic for an API call at a specific index in a code block.
- * The retry pattern uses a while-loop + try-catch with retry decrement.
- */
+//Inserts retry logic for an API call at a specific index in a code block.
+//The retry pattern uses a while-loop + try-catch with retry decrement.
 function injectRetryLogic(bodyArray: any[], index: number, statement: any) {
     const retryVariable = {
         type: 'VariableDeclaration',
@@ -174,9 +161,7 @@ function injectRetryLogic(bodyArray: any[], index: number, statement: any) {
     bodyArray.splice(index + 2, 1); // Remove the unwrapped statement
 }
 
-/**
- * Dispatcher-compatible fix function to apply retry logic to a file path.
- */
+//Dispatcher-compatible fix function to apply retry logic to a file path.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

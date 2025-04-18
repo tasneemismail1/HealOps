@@ -1,4 +1,3 @@
-// VS Code API modules for reading and editing workspace files
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -7,24 +6,18 @@ import * as acorn from 'acorn';
 import { simple as walkSimple } from 'acorn-walk';
 import * as escodegen from "escodegen";
 
-// Local utilities for parsing and modifying AST
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Main function to fix timeout issues in Axios requests.
- * Parses the file, injects timeout where missing, and rewrites it in VS Code.
- *
- * @param issue - A string formatted as "<filename> - <description>"
- */
+
 export async function applyFixTimeoutIssue(issue: string) {
-    console.log(issue); // Log raw issue for debugging
+    console.log(issue);
 
     const file = issue.split(" - ")[0].trim(); // Extract filename
     const fileName = path.basename(file);
 
     // Ensure a workspace is open before proceeding
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) return null;
+    if (!workspaceFolders) {return null;}
 
     const directory = workspaceFolders[0].uri.fsPath;
     const filePath = path.join(directory, fileName);
@@ -57,17 +50,11 @@ export async function applyFixTimeoutIssue(issue: string) {
     }
 }
 
-/**
- * Detects and adds `timeout` to Axios request configurations if missing.
- *
- * @param ast - Parsed Abstract Syntax Tree of the file
- * @param file - File name (used for debugging/logs only)
- * @returns Updated source code string, or empty if no changes were needed
- */
+//Detects and adds `timeout` to Axios request configurations if missing.
 function fixTimeoutIssues(ast: any, file: string): string {
     let codeModified = false;
 
-    // Walk through AST nodes to find Axios calls
+    //find Axios calls
     walkSimple(ast, {
         CallExpression(node) {
             if (
@@ -143,12 +130,7 @@ function fixTimeoutIssues(ast: any, file: string): string {
     return codeModified ? escodegen.generate(ast) : "";
 }
 
-/**
- * Dispatcher-compatible entry point to apply timeout fix logic from a file path.
- *
- * @param filePath - Full path to the source file
- * @returns Fixed source code string
- */
+//Dispatcher-compatible entry point to apply timeout fix logic from a file path.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

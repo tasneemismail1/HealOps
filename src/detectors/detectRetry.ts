@@ -1,20 +1,13 @@
-// Import estraverse for AST traversal with parent tracking
-import * as estraverse from 'estraverse';
+import * as estraverse from 'estraverse'; //AST traversal
 
-/**
- * Detects fetch/axios API calls not wrapped with retry logic.
- * 
- * @param ast - Parsed AST
- * @param file - File name for context in output
- * @returns string[] - List of retry-related issues
- */
+//Detects fetch/axios API calls not wrapped with retry logic.
 export function detectRetryIssues(ast: any, file: string): string[] {
     const issues: string[] = [];
 
     // Track parent references for upward context traversal
     const parentMap = new WeakMap();
 
-    // First pass: attach parent info
+    // First: attach parent info
     estraverse.traverse(ast, {
         enter(node, parent) {
             if (parent) {
@@ -23,7 +16,7 @@ export function detectRetryIssues(ast: any, file: string): string[] {
         }
     });
 
-    // Second pass: analyze and detect retry issues
+    // Second: analyze and detect retry issues
     estraverse.traverse(ast, {
         enter(node) {
             if (
@@ -40,16 +33,16 @@ export function detectRetryIssues(ast: any, file: string): string[] {
                 let identifierName = 'UnknownVariable';
                 let apiCall = 'unknown';
 
-if (node.callee.type === 'Identifier') {
-    apiCall = node.callee.name; // e.g., fetch
-} else if (
-    node.callee.type === 'MemberExpression' &&
-    node.callee.object?.type === 'Identifier' &&
-    node.callee.object.name === 'axios' &&
-    node.callee.property?.type === 'Identifier'
-) {
-    apiCall = `axios.${node.callee.property.name}`; // e.g., axios.get
-}
+                if (node.callee.type === 'Identifier') {
+                    apiCall = node.callee.name; // e.g., fetch
+                } else if (
+                    node.callee.type === 'MemberExpression' &&
+                    node.callee.object?.type === 'Identifier' &&
+                    node.callee.object.name === 'axios' &&
+                    node.callee.property?.type === 'Identifier'
+                ) {
+                    apiCall = `axios.${node.callee.property.name}`; // e.g., axios.get
+                }
 
                 // Get variable name if it's assigned
                 let current = parentMap.get(node);

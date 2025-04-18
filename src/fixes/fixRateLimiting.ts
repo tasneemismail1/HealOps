@@ -1,20 +1,11 @@
-// VS Code APIs for reading, editing, and refreshing workspace files
 import * as vscode from 'vscode';
-// Node.js utilities for working with files and paths
 import * as fs from 'fs';
 import * as path from 'path';
-
-// Utility function to fetch all JS/TS files in the workspace
 import { getAllJsTsFiles } from '../utils/fileUtils';
-// AST helpers (not used in this fix but included for future expansion)
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Entry point to apply fixes for missing rate limiting logic in an Express.js app.
- * The fix includes importing `express-rate-limit` and adding the middleware to `app`.
- *
- * @param issue - A string in the format "<filename> - <issue description>"
- */
+//apply fixes for missing rate limiting logic in an Express.js app.
+//importing `express-rate-limit` and adding the middleware to `app`.
 export async function applyFixRateLimitingIssue(issue: string) {
     // Ensure the workspace is open
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -54,7 +45,7 @@ export async function applyFixRateLimitingIssue(issue: string) {
     // Apply the actual fix logic
     const fixedCode = fixRateLimitingIssues(text);
 
-    // If nothing changed, inform the user
+    // If nothing changed, display a message
     if (fixedCode === text) {
         vscode.window.showInformationMessage(`✅ No changes were needed in ${filePath}.`);
         return;
@@ -76,14 +67,7 @@ export async function applyFixRateLimitingIssue(issue: string) {
     vscode.window.showInformationMessage(`✅ Rate limiting middleware added in ${filePath}`);
 }
 
-/**
- * Core logic to add rate limiting to Express.js files if it's missing.
- * - Adds the import for `express-rate-limit` if needed.
- * - Adds `app.use(rateLimit(...))` after app initialization.
- *
- * @param fileContent - Original JavaScript/TypeScript file content
- * @returns Modified code with rate limiting applied
- */
+//add rate limiting to Express.js files if it's missing.
 function fixRateLimitingIssues(fileContent: string): string {
     let modified = false;
 
@@ -93,7 +77,7 @@ function fixRateLimitingIssues(fileContent: string): string {
         modified = true;
     }
 
-    // Add middleware if not already applied
+    // Add `app.use(rateLimit(...))` middleware if not applied
     if (!fileContent.includes("app.use(rateLimit")) {
         fileContent = fileContent.replace(
             /const app = express\(\);/,
@@ -106,10 +90,7 @@ function fixRateLimitingIssues(fileContent: string): string {
     return modified ? fileContent : fileContent;
 }
 
-/**
- * Programmatic interface to apply this fix logic to any file path.
- * Can be used by the dispatcher or for testing purposes.
- */
+//apply this fix logic to any file path
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

@@ -1,4 +1,3 @@
-// Import required modules from VS Code, Node, and AST libraries
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { simple as walkSimple } from 'acorn-walk';
@@ -7,12 +6,7 @@ import * as escodegen from 'escodegen';
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Main function to fix missing logging inside catch blocks of try-catch statements.
- * Ensures that every catch block logs the caught error using `console.error(...)`.
- *
- * @param issue - A string describing the issue (e.g. "file.js - Missing logging in try-catch block.")
- */
+//fix missing logging inside catch blocks of try-catch statements.
 export async function applyFixLoggingIssue(issue: string) {
     // Check if VS Code workspace is open
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -31,7 +25,7 @@ export async function applyFixLoggingIssue(issue: string) {
     const fileName = match[1].trim();
     const projectRoot = workspaceFolders[0].uri.fsPath;
 
-    // Find the full path of the file using our utility
+    // Find the full path of the file
     const allFiles = getAllJsTsFiles(projectRoot);
     const filePath = allFiles.find(file => path.basename(file) === fileName);
 
@@ -48,7 +42,7 @@ export async function applyFixLoggingIssue(issue: string) {
         // Apply fix to inject logging into catch blocks
         const fixedCode = fixLoggingIssues(text);
 
-        // If nothing changed, notify the user
+        // If nothing changed, show message
         if (fixedCode === text) {
             vscode.window.showInformationMessage(`✅ No changes needed in ${filePath}.`);
             return;
@@ -66,18 +60,13 @@ export async function applyFixLoggingIssue(issue: string) {
     }
 }
 
-/**
- * Modifies the AST of the provided file content to ensure all catch blocks include logging.
- * If a catch block does not contain any console logging, it injects `console.error(...)`.
- * 
- * @param fileContent - The original source code as a string
- * @returns string - Modified code with logging fixes applied, or original if unchanged
- */
+//Modifies the AST of the provided file content to ensure all catch blocks include logging.
+//If a catch block does not contain any console logging, it injects `console.error(...)`.
 export function fixLoggingIssues(fileContent: string): string {
     const ast = acorn.parse(fileContent, { ecmaVersion: 'latest', sourceType: 'module' });
     let codeModified = false;
 
-    // Traverse the AST to find TryStatements and inspect their catch blocks
+    //find TryStatements and inspect their catch blocks
     walkSimple(ast, {
         TryStatement(node: any) {
             const catchBlock = node.handler;
@@ -122,12 +111,7 @@ export function fixLoggingIssues(fileContent: string): string {
     return codeModified ? escodegen.generate(ast, { comment: true }) : fileContent;
 }
 
-/**
- * Generic function used by the dispatcher to apply the logging fix to any file path.
- *
- * @param filePath - Full path of the file to be fixed
- * @returns string - The updated code, or the original if no fix was applied
- */
+//Generic function used by the dispatcher to apply the logging fix to any file path.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

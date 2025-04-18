@@ -1,18 +1,11 @@
-// VS Code APIs for reading, editing, and writing to open files
 import * as vscode from 'vscode';
-// Node path module to help resolve and compare file paths
 import * as path from 'path';
 
-// Helper utilities for scanning JS/TS files and working with ASTs
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Main function to fix missing health-check endpoint issues.
- * This adds a default GET /health route to the appropriate Express.js file.
- * 
- * @param issue - A string representing the issue, typically "<file> - <message>"
- */
+//fix missing health-check endpoint issues.
+//This adds a default GET /health route to the appropriate Express.js file.
 export async function applyFixHealthCheckIssue(issue: string) {
     console.log("Fixing health check issue for:", issue);
 
@@ -63,13 +56,9 @@ export async function applyFixHealthCheckIssue(issue: string) {
     }
 }
 
-/**
- * Modifies the file content to add a health-check endpoint if it's missing.
- * The endpoint is added just before the first occurrence of `app.listen(...)`.
- * 
- * @param fileContent - Original file content as a string
- * @returns string - Updated file content with health-check added (if needed)
- */
+//Modifies the file content to add a health-check endpoint if it's missing.
+//The endpoint is added just before the first occurrence of `app.listen(...)`.
+
 function fixHealthCheckIssues(fileContent: string): string {
     let modified = false;
 
@@ -93,17 +82,11 @@ function fixHealthCheckIssues(fileContent: string): string {
     return modified ? fileContent : fileContent;
 }
 
-/**
- * Generic applyFix function used by the system to apply the fix logic.
- * 
- * @param filePath - Full path to the file to be fixed
- * @returns string - Final fixed code (or original if unchanged)
- */
+//Generic applyFix function used by the system to apply the fix logic.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();
 
-    // Run the specific fix function
     const fixedCode = fixHealthCheckIssues
         ? fixHealthCheckIssues(text)
         : text;

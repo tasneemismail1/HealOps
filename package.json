@@ -55,6 +55,11 @@
         "command": "healops.ignoreFix",
         "title": "Ignore Fix",
         "category": "HealOps"
+      },
+      {
+        "command": "healops.generateReport",
+        "title": "Generate HealOps Report",
+        "category": "HealOps"
       }
     ],
     "viewsContainers": {
@@ -102,7 +107,16 @@
             "${viewItem.fileName}",
             "${viewItem.issueText}"
           ]
-        }
+        },
+        {
+          "command": "healops.generateReport",
+          "when": "viewItem == 'generateReport'",
+          "group": "inline",
+          "args": [
+            "${viewItem.fileName}",
+            "${viewItem.issueText}"
+          ]
+      }
       ]
     }
   },

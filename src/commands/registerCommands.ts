@@ -1,32 +1,24 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-
-// Importing custom UI components
 import { HealOpsPanel } from '../ui/HealOpsPanel';
 import { PreviewFixPanel } from '../ui/PreviewFixPanel';
-
-// Core logic to scan the codebase and identify issues
 import { scanProject } from './scanProject';
 
 // Tree view and item interfaces for displaying issues in the VS Code sidebar
 import { HealOpsItem, HealOpsTreeProvider } from '../HealOpsTreeProvider';
-
-// Utility to recursively retrieve all JS/TS files in the project
 import { getAllJsTsFiles } from '../utils/fileUtils';
 
 // Dispatcher to get the appropriate fix module based on the detected issue
 import { getFixModule } from '../fixes/fixDispatcher';
-
-// Utility to detect the type of issue from its text description
 import { detectIssueType } from '../utils/issueUtils';
 
+//import {HealOpsReport} from '../utils/reportGenerator';
 
-/**
- * Registers all HealOps-related commands that will be exposed to the user through VS Code.
- * This function is the entry point for command registration in the extension lifecycle.
- * It follows good separation of concerns and contributes to a maintainable plugin architecture.
- */
+import { generateHealOpsReport } from '../utils/reportGenerator';
+
+//Entry point for command registration in the extension lifecycle.
 export function registerHealOpsCommands(context: vscode.ExtensionContext) {
+
     // Initialize a tree view provider to visually list issues in a dedicated sidebar
     const treeDataProvider = new HealOpsTreeProvider();
     vscode.window.createTreeView('healopsIssuesView', { treeDataProvider });
@@ -34,15 +26,13 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
     // Register all extension commands and attach them to the extension context
     context.subscriptions.push(
 
-        // Command to open the main HealOps information panel
+        //open the main HealOps information panel
         vscode.commands.registerCommand('healops.openPanel', () => {
             HealOpsPanel.createOrShow(context.extensionUri);
         }),
 
-        /**
-         * Command to scan the entire workspace for known microservice anti-patterns.
-         * Detected issues are grouped and displayed in the sidebar tree view.
-         */
+        //Command to scan the entire workspace
+        //Detected issues are grouped and displayed in the sidebar tree view.
         vscode.commands.registerCommand('healops.scanMicroservices', async () => {
 
             // Perform the scan and show real-time progress in the status bar
@@ -50,7 +40,7 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
                 vscode.window.setStatusBarMessage(`Scanning: ${progress}%`)
             );
 
-            // Retrieve the root path of the current project/workspace
+            // Retrieve the root path of the current project
             const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
 
             // Get a list of all relevant JavaScript/TypeScript files
@@ -62,7 +52,7 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
                 const [file, message] = full.split(' - ');
                 const fullPath = allFiles.find(f => f.endsWith(file));
                 if (fullPath) {
-                    if (!grouped[fullPath]) grouped[fullPath] = [];
+                    if (!grouped[fullPath]) {grouped[fullPath] = [];}
                     grouped[fullPath].push(message);
                 }
             }
@@ -72,10 +62,7 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`Scan completed! Detected ${issues.length} issues.`);
         }),
 
-        /**
-         * Command to preview how a suggested fix would alter the code.
-         * This allows the developer to verify changes before applying them.
-         */
+        //Command to preview how a suggested fix would alter the code to verify changes before applying them.
         vscode.commands.registerCommand('healops.previewFix', async (item: HealOpsItem) => {
             if (!item.fileName || !item.issueText) {
                 vscode.window.showErrorMessage('Missing file or issue.');
@@ -106,10 +93,7 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
             }
         }),
 
-        /**
-         * Command to apply a code fix directly to the source file.
-         * This permanently replaces the code with the fixed version.
-         */
+        //Command to apply a code fix directly to the source file.
         vscode.commands.registerCommand('healops.applyFix', async (item: HealOpsItem) => {
             if (!item.fileName || !item.issueText) {
                 vscode.window.showErrorMessage('❌ Missing file or issue.');
@@ -149,10 +133,8 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
             }
         }),
 
-        /**
-         * Command to ignore a flagged issue.
-         * This is useful when the developer decides that a fix is not applicable.
-         */
+        //Command to ignore a flagged issue.
+        //This is useful when the developer decides that a fix is not applicable.
         vscode.commands.registerCommand('healops.ignoreFix', (item: HealOpsItem) => {
 
             // Fetch existing issues for the file from the tree provider
@@ -165,6 +147,30 @@ export function registerHealOpsCommands(context: vscode.ExtensionContext) {
             treeDataProvider.refresh({ [item.fileName!]: updated });
 
             vscode.window.showWarningMessage(`⚠️ Ignored fix: ${item.issueText}`);
+        }),
+
+        // vscode.commands.registerCommand('healops.generateReport', async () => {
+        //     const projectName = vscode.workspace.name || 'UnknownProject';
+        //     const workspacePath = vscode.workspace.workspaceFolders?.[0].uri.fsPath || './';
+
+        //     const report = new HealOpsReport(workspacePath, projectName);
+
+        //     // TODO: Loop through detected issues here.
+        //     // Replace this with real scan data.
+        //     report.addIssue({
+        //         projectName,
+        //         filePath: 'src/example.ts',
+        //         issueType: 'Missing Circuit Breaker',
+        //         fixStatus: 'Fixed',
+        //         detectedAt: new Date().toISOString(),
+        //         fixedAt: new Date().toISOString()
+        //     });
+
+        //     report.generateReport();
+        //     vscode.window.showInformationMessage('HealOps Report Generated!');
+        // })
+        vscode.commands.registerCommand('healops.generateReport', () => {
+            generateHealOpsReport(treeDataProvider.getIssueMap());
         })
     );
 }

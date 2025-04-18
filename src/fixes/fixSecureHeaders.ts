@@ -1,17 +1,11 @@
-// Required imports for file manipulation and project navigation
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-// Utility to collect all JavaScript and TypeScript files
 import { getAllJsTsFiles } from '../utils/fileUtils';
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Fixes missing secure headers in Express apps by injecting helmet middleware.
- * Adds both the required `require('helmet')` statement and `app.use(helmet())` call.
- * 
- * @param issue - The issue string (e.g., "server.js - Secure headers middleware is missing.")
- */
+//Fixes missing secure headers in Express apps by injecting helmet middleware.
+//Adds both the required `require('helmet')` statement and `app.use(helmet())` call.
 export async function applyFixSecureHeadersIssue(issue: string) {
     console.log("Fixing secure headers issue for:", issue);
 
@@ -61,17 +55,7 @@ export async function applyFixSecureHeadersIssue(issue: string) {
     }
 }
 
-/**
- * Injects the helmet middleware into the Express app if it's not already included.
- * 
- * - Adds: `const helmet = require('helmet');` at the top.
- * - Adds: `app.use(helmet());` immediately after the app is created.
- * 
- * Handles variable app name (e.g., `const app = express();` or `const server = express();`)
- *
- * @param fileContent - The source code to be modified
- * @returns string - Modified source code (or original if no change needed)
- */
+//Injects the helmet middleware into the Express app if it's not already included.
 function fixSecureHeadersIssues(fileContent: string): string {
     let modified = false;
 
@@ -98,12 +82,7 @@ function fixSecureHeadersIssues(fileContent: string): string {
     return modified ? fileContent : fileContent;
 }
 
-/**
- * Dispatcher-compatible method for invoking the secure headers fix.
- * 
- * @param filePath - Full path to the file
- * @returns Updated file content
- */
+//Dispatcher-compatible method for invoking the secure headers fix.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();

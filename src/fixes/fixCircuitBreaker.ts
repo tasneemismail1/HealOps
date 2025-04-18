@@ -1,4 +1,3 @@
-// VS Code API modules for file handling and workspace path resolution
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -9,15 +8,9 @@ import { ancestor as walkAncestor } from "acorn-walk";
 // ESTree-compliant code generator for turning AST back into JS code
 import * as escodegen from "escodegen";
 import * as estree from 'estree';
-
-// Utility functions for parsing and modifying AST
 import { modifyAstAndGenerateCode, parseAst } from '../utils/astUtils';
 
-/**
- * Entry point to apply a circuit breaker fix on a given issue.
- * This function identifies the API call, modifies the AST, generates the new code,
- * and replaces the old file content with the new one.
- */
+//apply a circuit breaker fix on a given issue.
 export async function applyFixCircuitBreakerIssue(issue: string) {
     console.log("Fixing circuit breaker issue for:", issue);
 
@@ -62,13 +55,7 @@ export async function applyFixCircuitBreakerIssue(issue: string) {
     }
 }
 
-/**
- * Applies circuit breaker transformation logic to axios/fetch calls using AST traversal and modification.
- * 
- * @param ast - The parsed Abstract Syntax Tree of the file
- * @param file - The file path (used only for reporting/logging)
- * @returns string - Transformed JavaScript code (or empty string if no changes were needed)
- */
+//Applies circuit breaker transformation logic to axios/fetch calls
 function fixCircuitBreakerIssues(ast: any, file: string): string {
     let breakerCount = 1;
     let hasCircuitBreakerImport = false;
@@ -118,7 +105,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
                 label = "fetch";
             }
 
-            if (!shouldWrap) return;
+            if (!shouldWrap) {return;}
 
             // Generate unique circuit breaker and function identifiers
             const breakerVar = `breaker${breakerCount++}`;
@@ -258,10 +245,7 @@ function fixCircuitBreakerIssues(ast: any, file: string): string {
 }
 
 
-/**
- * Wrapper function for testing or external usage
- * Applies circuit breaker fix logic to a given file.
- */
+//Applies circuit breaker fix logic to a given file.
 export async function applyFix(filePath: string): Promise<string> {
     const document = await vscode.workspace.openTextDocument(filePath);
     const text = document.getText();
